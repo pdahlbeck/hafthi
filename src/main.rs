@@ -30,7 +30,6 @@ use wgpu::{
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 use wgpu::util::DeviceExt;
-#[cfg(target_os = "linux")]
 use winit::platform::wayland::WindowBuilderExtWayland;
 
 use winit::{
@@ -898,7 +897,6 @@ fn send_key(pty: &PtySession, key: &Key, text: Option<&str>, modifiers: Modifier
     }
 }
 
-#[cfg(target_os = "linux")]
 fn request_hyprland_no_blur() {
     if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
         return;
@@ -927,8 +925,6 @@ fn request_hyprland_no_blur() {
     });
 }
 
-#[cfg(not(target_os = "linux"))]
-fn request_hyprland_no_blur() {}
 
 fn main() -> Result<()> {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
@@ -944,7 +940,6 @@ fn main() -> Result<()> {
             settings.window_height as f64,
         ));
 
-    #[cfg(target_os = "linux")]
     let builder = builder.with_name("se.dahlbeck.Hafthi", "se.dahlbeck.Hafthi");
 
     let window = Arc::new(builder.build(&event_loop)?);
