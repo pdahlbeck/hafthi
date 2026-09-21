@@ -44,25 +44,6 @@ pub struct TerminalGrid {
 
 const DEFAULT_FG: Rgb = Rgb::new(245, 245, 245);
 
-const ANSI16: [Rgb; 16] = [
-    Rgb::new(0, 0, 0),
-    Rgb::new(205, 49, 49),
-    Rgb::new(13, 188, 121),
-    Rgb::new(229, 229, 16),
-    Rgb::new(36, 114, 200),
-    Rgb::new(188, 63, 188),
-    Rgb::new(17, 168, 205),
-    Rgb::new(229, 229, 229),
-    Rgb::new(102, 102, 102),
-    Rgb::new(241, 76, 76),
-    Rgb::new(35, 209, 139),
-    Rgb::new(245, 245, 67),
-    Rgb::new(59, 142, 234),
-    Rgb::new(214, 112, 214),
-    Rgb::new(41, 184, 219),
-    Rgb::new(255, 255, 255),
-];
-
 impl Default for CellStyle {
     fn default() -> Self {
         Self {
