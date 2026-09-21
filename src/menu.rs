@@ -15,6 +15,7 @@ pub enum MenuAction {
 
 #[derive(Debug, Clone)]
 pub struct MenuEntry {
+    pub icon: &'static str,
     pub label: &'static str,
     pub shortcut: &'static str,
     pub action: MenuAction,
@@ -37,21 +38,21 @@ impl ContextMenu {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 430.0,
-            row_height: 46.0,
+            width: 500.0,
+            row_height: 52.0,
             hovered: None,
             entries: vec![
-                MenuEntry { label: "Copy", shortcut: "Ctrl+Shift+C", action: MenuAction::Copy, separator_after: false },
-                MenuEntry { label: "Paste", shortcut: "Ctrl+Shift+V", action: MenuAction::Paste, separator_after: false },
-                MenuEntry { label: "Select All", shortcut: "", action: MenuAction::SelectAll, separator_after: true },
-                MenuEntry { label: "New Window", shortcut: "", action: MenuAction::NewWindow, separator_after: true },
-                MenuEntry { label: "Increase Font", shortcut: "", action: MenuAction::IncreaseFont, separator_after: false },
-                MenuEntry { label: "Decrease Font", shortcut: "", action: MenuAction::DecreaseFont, separator_after: false },
-                MenuEntry { label: "Reset Font Size", shortcut: "", action: MenuAction::ResetFont, separator_after: false },
-                MenuEntry { label: "Clear Scrollback", shortcut: "", action: MenuAction::ClearScrollback, separator_after: true },
-                MenuEntry { label: "Preferences…", shortcut: "", action: MenuAction::Preferences, separator_after: false },
-                MenuEntry { label: "Edit Hafþi Config", shortcut: "", action: MenuAction::EditConfig, separator_after: true },
-                MenuEntry { label: "Quit", shortcut: "", action: MenuAction::Quit, separator_after: false },
+                MenuEntry { icon: "⧉", label: "Copy", shortcut: "Ctrl+Shift+C", action: MenuAction::Copy, separator_after: false },
+                MenuEntry { icon: "▣", label: "Paste", shortcut: "Ctrl+Shift+V", action: MenuAction::Paste, separator_after: false },
+                MenuEntry { icon: "☑", label: "Select All", shortcut: "", action: MenuAction::SelectAll, separator_after: true },
+                MenuEntry { icon: "＋", label: "New Window", shortcut: "", action: MenuAction::NewWindow, separator_after: true },
+                MenuEntry { icon: "A+", label: "Increase Font", shortcut: "", action: MenuAction::IncreaseFont, separator_after: false },
+                MenuEntry { icon: "A−", label: "Decrease Font", shortcut: "", action: MenuAction::DecreaseFont, separator_after: false },
+                MenuEntry { icon: "A", label: "Reset Font Size", shortcut: "", action: MenuAction::ResetFont, separator_after: false },
+                MenuEntry { icon: "↺", label: "Clear Scrollback", shortcut: "", action: MenuAction::ClearScrollback, separator_after: true },
+                MenuEntry { icon: "⚙", label: "Preferences…", shortcut: "", action: MenuAction::Preferences, separator_after: false },
+                MenuEntry { icon: "✎", label: "Edit Hafþi Config", shortcut: "", action: MenuAction::EditConfig, separator_after: true },
+                MenuEntry { icon: "×", label: "Quit", shortcut: "", action: MenuAction::Quit, separator_after: false },
             ],
         }
     }
@@ -65,7 +66,7 @@ impl ContextMenu {
         scale: f32,
         row_height: f32,
     ) {
-        self.width = 430.0 * scale;
+        self.width = 500.0 * scale;
         self.row_height = row_height.max(1.0);
         let height = self.height();
 
@@ -126,6 +127,14 @@ impl ContextMenu {
         self.entries
             .iter()
             .map(|entry| entry.shortcut)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn icons(&self) -> String {
+        self.entries
+            .iter()
+            .map(|entry| entry.icon)
             .collect::<Vec<_>>()
             .join("\n")
     }
