@@ -158,6 +158,56 @@ impl RectRenderer {
         ]);
     }
 
+    fn push_rounded_rect(
+        vertices: &mut Vec<RectVertex>,
+        width: u32,
+        height: u32,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        color: [f32; 4],
+    ) {
+        let radius = radius.min(w * 0.5).min(h * 0.5).max(0.0);
+        if radius <= 0.5 {
+            Self::push_rect(vertices, width, height, x, y, w, h, color);
+            return;
+        }
+
+        let sx = |px: f32| (px / width.max(1) as f32) * 2.0 - 1.0;
+        let sy = |py: f32| 1.0 - (py / height.max(1) as f32) * 2.0;
+        let center = [sx(x + w * 0.5), sy(y + h * 0.5)];
+        let v = |px: f32, py: f32| RectVertex {
+            position: [sx(px), sy(py)],
+            color,
+        };
+        let vc = RectVertex { position: center, color };
+
+        let corners = [
+            (x + radius, y + radius, std::f32::consts::PI, std::f32::consts::PI * 1.5),
+            (x + w - radius, y + radius, std::f32::consts::PI * 1.5, std::f32::consts::PI * 2.0),
+            (x + w - radius, y + h - radius, 0.0, std::f32::consts::PI * 0.5),
+            (x + radius, y + h - radius, std::f32::consts::PI * 0.5, std::f32::consts::PI),
+        ];
+
+        let mut outline = Vec::new();
+        const STEPS: usize = 6;
+        for (cx, cy, start, end) in corners {
+            for step in 0..=STEPS {
+                let t = step as f32 / STEPS as f32;
+                let angle = start + (end - start) * t;
+                outline.push((cx + radius * angle.cos(), cy + radius * angle.sin()));
+            }
+        }
+
+        for i in 0..outline.len() {
+            let (x1, y1) = outline[i];
+            let (x2, y2) = outline[(i + 1) % outline.len()];
+            vertices.extend_from_slice(&[vc, v(x1, y1), v(x2, y2)]);
+        }
+    }
+
     fn create_buffer(&self, device: &Device, vertices: &[RectVertex]) -> Option<wgpu::Buffer> {
         if vertices.is_empty() {
             return None;
@@ -197,6 +247,7 @@ struct GpuState {
     text_renderer: TextRenderer,
     text_buffer: Buffer,
     menu_buffer: Buffer,
+    menu_shortcut_buffer: Buffer,
     prefs_buffer: Buffer,
     prefs_minus_buffer: Buffer,
     prefs_plus_buffer: Buffer,
@@ -305,13 +356,18 @@ impl GpuState {
         );
         text_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let menu_font_size = settings.font_size * 0.78;
-        let menu_line_height = settings.line_height * 0.92;
+        let menu_font_size = settings.font_size * 0.80;
+        let menu_line_height = settings.line_height * 1.05;
         let mut menu_buffer = Buffer::new(
             &mut font_system,
             Metrics::new(menu_font_size, menu_line_height),
         );
         menu_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
+        let mut menu_shortcut_buffer = Buffer::new(
+            &mut font_system,
+            Metrics::new(menu_font_size * 0.86, menu_line_height),
+        );
+        menu_shortcut_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
         let mut prefs_buffer = Buffer::new(
             &mut font_system,
@@ -359,6 +415,7 @@ impl GpuState {
             text_renderer,
             text_buffer,
             menu_buffer,
+            menu_shortcut_buffer,
             prefs_buffer,
             prefs_minus_buffer,
             prefs_plus_buffer,
@@ -384,6 +441,8 @@ impl GpuState {
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.menu_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
+        self.menu_shortcut_buffer
+            .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.prefs_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         for buffer in [
@@ -399,7 +458,7 @@ impl GpuState {
     }
 
     fn menu_line_height(&self) -> f32 {
-        self.settings.line_height * 0.92
+        self.settings.line_height * 1.05
     }
 
     fn apply_settings(&mut self, settings: Settings) {
@@ -417,8 +476,8 @@ impl GpuState {
 
         let font_size = self.settings.font_size;
         let line_height = self.settings.line_height;
-        let menu_font_size = font_size * 0.78;
-        let menu_line_height = line_height * 0.92;
+        let menu_font_size = font_size * 0.80;
+        let menu_line_height = line_height * 1.05;
 
         self.text_buffer.set_metrics(
             &mut self.font_system,
@@ -427,6 +486,10 @@ impl GpuState {
         self.menu_buffer.set_metrics(
             &mut self.font_system,
             Metrics::new(menu_font_size, menu_line_height),
+        );
+        self.menu_shortcut_buffer.set_metrics(
+            &mut self.font_system,
+            Metrics::new(menu_font_size * 0.86, menu_line_height),
         );
         self.prefs_buffer.set_metrics(
             &mut self.font_system,
@@ -530,14 +593,20 @@ GIF max FPS               {:>2}\n\
                 &menu.text(),
                 Attrs::new()
                     .family(Family::Name(&self.settings.font_family))
-                    .color(Color::rgb(
-                        self.settings.foreground.r,
-                        self.settings.foreground.g,
-                        self.settings.foreground.b,
-                    )),
+                    .color(Color::rgb(238, 238, 240)),
                 Shaping::Advanced,
             );
             self.menu_buffer.shape_until_scroll(&mut self.font_system);
+
+            self.menu_shortcut_buffer.set_text(
+                &mut self.font_system,
+                &menu.shortcuts(),
+                Attrs::new()
+                    .family(Family::Name(&self.settings.font_family))
+                    .color(Color::rgb(165, 168, 174)),
+                Shaping::Advanced,
+            );
+            self.menu_shortcut_buffer.shape_until_scroll(&mut self.font_system);
         }
 
         if prefs.visible {
@@ -653,7 +722,7 @@ GIF max FPS               {:>2}\n\
         } else if menu.visible {
             let menu_area = TextArea {
                 buffer: &self.menu_buffer,
-                left: menu.x + 12.0 * self.settings.scale_factor,
+                left: menu.x + 22.0 * self.settings.scale_factor,
                 top: menu.y,
                 scale: 1.0,
                 bounds: TextBounds {
@@ -662,11 +731,20 @@ GIF max FPS               {:>2}\n\
                     right: (menu.x + menu.width) as i32,
                     bottom: (menu.y + menu.height()) as i32,
                 },
-                default_color: Color::rgb(
-                    self.settings.foreground.r,
-                    self.settings.foreground.g,
-                    self.settings.foreground.b,
-                ),
+                default_color: Color::rgb(238, 238, 240),
+            };
+            let shortcut_area = TextArea {
+                buffer: &self.menu_shortcut_buffer,
+                left: menu.x + menu.width - 170.0 * self.settings.scale_factor,
+                top: menu.y,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: menu.x as i32,
+                    top: menu.y as i32,
+                    right: (menu.x + menu.width - 18.0 * self.settings.scale_factor) as i32,
+                    bottom: (menu.y + menu.height()) as i32,
+                },
+                default_color: Color::rgb(165, 168, 174),
             };
 
             self.text_renderer
@@ -679,7 +757,7 @@ GIF max FPS               {:>2}\n\
                         width: self.config.width,
                         height: self.config.height,
                     },
-                    [terminal_area, menu_area],
+                    [terminal_area, menu_area, shortcut_area],
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
@@ -800,8 +878,23 @@ GIF max FPS               {:>2}\n\
         }
 
         if menu.visible {
-            // Opaque menu surface for readability over transparent terminals.
-            RectRenderer::push_rect(
+            let scale = self.settings.scale_factor.max(1.0);
+            let radius = 10.0 * scale;
+
+            // A subtle edge plus a charcoal surface gives the menu the same
+            // modern visual weight as contemporary KDE/Wayland menus.
+            RectRenderer::push_rounded_rect(
+                &mut rect_vertices,
+                self.config.width,
+                self.config.height,
+                menu.x - 1.0 * scale,
+                menu.y - 1.0 * scale,
+                menu.width + 2.0 * scale,
+                menu.height() + 2.0 * scale,
+                radius + 1.0 * scale,
+                [0.32, 0.33, 0.35, 0.92],
+            );
+            RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
@@ -809,20 +902,38 @@ GIF max FPS               {:>2}\n\
                 menu.y,
                 menu.width,
                 menu.height(),
-                Settings::rgba_f32(self.settings.background, 0.98),
+                radius,
+                [0.055, 0.058, 0.064, 0.985],
             );
 
             if let Some(index) = menu.hovered {
-                RectRenderer::push_rect(
+                RectRenderer::push_rounded_rect(
                     &mut rect_vertices,
                     self.config.width,
                     self.config.height,
-                    menu.x + 2.0,
-                    menu.y + index as f32 * menu.row_height,
-                    menu.width - 4.0,
-                    menu.row_height,
-                    Settings::rgba_f32(self.settings.selection_background, 0.95),
+                    menu.x + 7.0 * scale,
+                    menu.y + index as f32 * menu.row_height + 4.0 * scale,
+                    menu.width - 14.0 * scale,
+                    menu.row_height - 8.0 * scale,
+                    6.0 * scale,
+                    [0.16, 0.17, 0.19, 0.98],
                 );
+            }
+
+            for (index, entry) in menu.entries.iter().enumerate() {
+                if entry.separator_after && index + 1 < menu.entries.len() {
+                    let y = menu.y + (index + 1) as f32 * menu.row_height;
+                    RectRenderer::push_rect(
+                        &mut rect_vertices,
+                        self.config.width,
+                        self.config.height,
+                        menu.x + 16.0 * scale,
+                        y - 0.5 * scale,
+                        menu.width - 32.0 * scale,
+                        1.0 * scale,
+                        [0.28, 0.29, 0.31, 0.72],
+                    );
+                }
             }
         }
 
