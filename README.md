@@ -50,13 +50,35 @@ Hafþi grew out of the Footsole project, but the current codebase is a native GP
 - Preferences UI polish
 - performance profiling and long-session testing
 
-## Build and run
+## Install
 
 ```bash
 git clone https://github.com/pdahlbeck/hafthi.git
 cd hafthi
+bash install.sh
+```
+
+The installer builds Hafþi in release mode and installs the complete desktop integration for the current user:
+
+- binary: `~/.local/bin/hafthi`
+- launcher: `~/.local/share/applications/hafthi.desktop`
+- icon: `~/.local/share/icons/hicolor/scalable/apps/hafthi.svg`
+
+The application therefore appears as **Hafþi** with its own icon in compatible Linux application launchers.
+
+To run directly from the source tree without installing:
+
+```bash
 cargo run --release
 ```
+
+To uninstall the application files:
+
+```bash
+bash uninstall.sh
+```
+
+User configuration in `~/.config/hafthi/` is deliberately kept when uninstalling.
 
 Hafþi currently targets Linux/Wayland.
 
