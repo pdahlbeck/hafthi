@@ -305,7 +305,7 @@ impl GpuState {
 
         let mut prefs_buffer = Buffer::new(
             &mut font_system,
-            Metrics::new(settings.font_size * 0.72, settings.line_height * 0.96),
+            Metrics::new(settings.font_size * 0.86, settings.line_height * 1.08),
         );
         prefs_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
@@ -414,7 +414,7 @@ impl GpuState {
         );
         self.prefs_buffer.set_metrics(
             &mut self.font_system,
-            Metrics::new(font_size * 0.72, line_height * 0.96),
+            Metrics::new(font_size * 0.86, line_height * 1.08),
         );
         let button_metrics = Metrics::new(font_size * 0.60, line_height * 0.96);
         for buffer in [
@@ -430,30 +430,16 @@ impl GpuState {
     }
 
     fn preferences_text(&self) -> String {
-        let image_chars: Vec<char> = self.settings.branding_image.chars().collect();
-        let image = if image_chars.len() > 30 {
-            format!("…{}", image_chars[image_chars.len() - 29..].iter().collect::<String>())
-        } else {
-            self.settings.branding_image.clone()
-        };
-
         format!(
             "Font size                 {:.1} px\n\
 Transparency              {:>3}%\n\
 Padding                   {:.0} px\n\
 Scrollback                {:>6}\n\
-Branding                  {:<8}\n\
-Image / GIF               {:<30}\n\
-GIF max FPS               {:>2}\n\
-\n\
-",
+\n",
             self.settings.font_size,
             (self.settings.opacity * 100.0).round() as u32,
             self.settings.padding / self.settings.scale_factor.max(1.0),
             self.settings.scrollback,
-            if self.settings.branding_enabled { "On" } else { "Off" },
-            image,
-            self.settings.branding_max_fps,
         )
     }
 
