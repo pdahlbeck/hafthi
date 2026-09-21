@@ -4,6 +4,7 @@ use std::{
     thread,
 };
 
+use crate::diagnostics;
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use winit::event_loop::EventLoopProxy;
@@ -78,7 +79,10 @@ impl PtySession {
                 }
             }
 
-            let _ = child.wait();
+            match child.wait() {
+                Ok(status) => diagnostics::record(&format!("PTY child status: {status:?}")),
+                Err(err) => diagnostics::record(&format!("PTY child wait error: {err:#}")),
+            }
             let _ = reader_proxy.send_event(AppEvent::PtyExited);
         });
 
