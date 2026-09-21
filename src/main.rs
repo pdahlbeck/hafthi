@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "linux"))]
-compile_error!("Hafthi currently supports Linux/Wayland only.");
+compile_error!("Hafþi currently supports Linux/Wayland only.");
 
 mod menu;
 mod preferences;
@@ -54,7 +54,7 @@ struct RectRenderer {
 impl RectRenderer {
     fn new(device: &Device, format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Hafthi rectangle shader"),
+            label: Some("Hafþi rectangle shader"),
             source: wgpu::ShaderSource::Wgsl(
                 r#"
                 struct VsOut {
@@ -82,7 +82,7 @@ impl RectRenderer {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Hafthi rectangle pipeline layout"),
+            label: Some("Hafþi rectangle pipeline layout"),
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
@@ -101,7 +101,7 @@ impl RectRenderer {
         ];
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Hafthi rectangle pipeline"),
+            label: Some("Hafþi rectangle pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -162,7 +162,7 @@ impl RectRenderer {
         }
 
         Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Hafthi rectangle vertices"),
+            label: Some("Hafþi rectangle vertices"),
             contents: bytemuck::cast_slice(vertices),
             usage: wgpu::BufferUsages::VERTEX,
         }))
@@ -230,14 +230,14 @@ impl GpuState {
 
         let info = adapter.get_info();
         eprintln!(
-            "Hafthi: {} ({:?}, {:?})",
+            "Hafþi: {} ({:?}, {:?})",
             info.name, info.backend, info.device_type
         );
 
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
-                    label: Some("Hafthi device"),
+                    label: Some("Hafþi device"),
                     required_features: Features::empty(),
                     required_limits: Limits::downlevel_defaults(),
                 },
@@ -268,7 +268,7 @@ impl GpuState {
             caps.alpha_modes[0]
         };
 
-        eprintln!("Hafthi alpha mode: {:?}", alpha_mode);
+        eprintln!("Hafþi alpha mode: {:?}", alpha_mode);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -778,12 +778,12 @@ GIF max FPS               {:>2}\n\
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Hafthi frame encoder"),
+                label: Some("Hafþi frame encoder"),
             });
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Hafthi terminal pass"),
+                label: Some("Hafþi terminal pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -906,7 +906,7 @@ fn request_hyprland_no_blur() {
 
     std::thread::spawn(move || {
         // Wait until Hyprland has mapped the Wayland window, then target the
-        // exact Hafthi process instead of relying on class/title regexes.
+        // exact Hafþi process instead of relying on class/title regexes.
         for delay_ms in [100_u64, 250, 500, 900] {
             std::thread::sleep(std::time::Duration::from_millis(delay_ms));
 
@@ -933,7 +933,7 @@ fn main() -> Result<()> {
     let mut settings = Settings::load();
 
     let builder = WindowBuilder::new()
-        .with_title("Hafthi")
+        .with_title("Hafþi")
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -946,7 +946,7 @@ fn main() -> Result<()> {
 
     settings.apply_scale_factor(window.scale_factor());
     eprintln!(
-        "Hafthi scale: {:.2}x, font: {:.1}px",
+        "Hafþi scale: {:.2}x, font: {:.1}px",
         window.scale_factor(),
         settings.font_size
     );
@@ -957,9 +957,9 @@ fn main() -> Result<()> {
     let mut wayland_no_blur = wayland_effect::NoBlur::attach(&window);
 
     let mut gpu = pollster::block_on(GpuState::new(window.clone(), settings.clone()))?;
-    window.set_title("Hafthi");
+    window.set_title("Hafþi");
     if wayland_no_blur.is_none() {
-        eprintln!("Hafthi: ext-background-effect-v1 unavailable, using Hyprland fallback");
+        eprintln!("Hafþi: ext-background-effect-v1 unavailable, using Hyprland fallback");
         request_hyprland_no_blur();
     }
 
