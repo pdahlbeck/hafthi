@@ -35,8 +35,8 @@ impl ContextMenu {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 340.0,
-            row_height: 42.0,
+            width: 380.0,
+            row_height: 48.0,
             hovered: None,
             entries: vec![
                 MenuEntry { label: "Copy", action: Some(MenuAction::Copy) },
@@ -51,7 +51,7 @@ impl ContextMenu {
                 MenuEntry { label: "Clear Scrollback", action: Some(MenuAction::ClearScrollback) },
                 MenuEntry { label: "────────────", action: None },
                 MenuEntry { label: "Preferences…", action: Some(MenuAction::Preferences) },
-                MenuEntry { label: "Edit Hafthi Config", action: Some(MenuAction::EditConfig) },
+                MenuEntry { label: "Edit Hafþi Config", action: Some(MenuAction::EditConfig) },
                 MenuEntry { label: "Quit", action: Some(MenuAction::Quit) },
             ],
         }
@@ -66,7 +66,7 @@ impl ContextMenu {
         scale: f32,
         row_height: f32,
     ) {
-        self.width = 300.0 * scale;
+        self.width = 380.0 * scale;
         self.row_height = row_height.max(1.0);
         let height = self.height();
 
