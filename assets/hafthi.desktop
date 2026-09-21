@@ -2,7 +2,7 @@
 Type=Application
 Name=Hafþi
 Comment=GPU-accelerated Wayland terminal emulator
-Exec=sh -lc 'exec "$HOME/.local/bin/hafthi"'
+Exec=hafthi
 Icon=hafthi
 Terminal=false
 Categories=System;TerminalEmulator;

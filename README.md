@@ -29,7 +29,8 @@ Hafþi grew out of the Footsole project, but the current codebase is a native GP
 - scrollback
 - right-click context menu
 - live font zoom
-- GPU-rendered preferences panel styled to match the context menu\n- explicit Off / Banner / Full image display controls
+- GPU-rendered preferences panel styled to match the context menu
+- explicit Off / Banner / Full image display controls
 - transparency / opacity control
 - terminal padding control
 - configurable scrollback
@@ -40,7 +41,6 @@ Hafþi grew out of the Footsole project, but the current codebase is a native GP
 
 ## Still in development
 
-- actual GPU rendering of selected PNG/GIF branding
 - split panes
 - Open File Manager Here
 - Copy Current Path
@@ -66,7 +66,17 @@ The installer builds Hafþi in release mode and installs the complete desktop in
 
 The application therefore appears as **Hafþi** with its own icon in compatible Linux application launchers.
 
-To update an existing clone and reinstall the newest version:\n\n```bash\ncd /path/to/hafthi\ngit pull\nbash install.sh\n```\n\nRestart Hafþi after installation. Your settings in `~/.config/hafthi/config.ini` remain in place.\n\nTo run directly from the source tree without installing:
+To update an existing clone and reinstall the newest version:
+
+```bash
+cd /path/to/hafthi
+git pull
+bash install.sh
+```
+
+Restart Hafþi after installation. Your settings in `~/.config/hafthi/config.ini` remain in place.
+
+To run directly from the source tree without installing:
 
 ```bash
 cargo run --release
