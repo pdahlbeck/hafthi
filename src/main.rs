@@ -2,6 +2,7 @@
 compile_error!("Hafþi currently supports Linux/Wayland only.");
 
 mod background;
+mod diagnostics;
 mod menu;
 mod preferences;
 mod pty;
@@ -1142,6 +1143,21 @@ fn request_hyprland_no_blur() {
 
 
 fn main() -> Result<()> {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        diagnostics::record(&format!("panic: {info}"));
+        original_hook(info);
+    }));
+    diagnostics::record("starting");
+    let result = run();
+    match &result {
+        Ok(()) => diagnostics::record("event loop ended"),
+        Err(err) => diagnostics::record(&format!("error: {err:#}")),
+    }
+    result
+}
+
+fn run() -> Result<()> {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
 
@@ -1210,6 +1226,7 @@ fn main() -> Result<()> {
                 window.request_redraw();
             }
             Event::UserEvent(AppEvent::PtyExited) => {
+                diagnostics::record("PTY shell exited; closing window");
                 elwt.exit();
             }
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
@@ -1256,7 +1273,10 @@ fn main() -> Result<()> {
                 }
             }
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => elwt.exit(),
+                WindowEvent::CloseRequested => {
+                    diagnostics::record("window close requested");
+                    elwt.exit();
+                }
                 WindowEvent::ModifiersChanged(new_modifiers) => {
                     modifiers = new_modifiers.state();
                 }
@@ -1631,6 +1651,7 @@ fn main() -> Result<()> {
                                     }
                                 }
                                 Some(MenuAction::Quit) => {
+                                    diagnostics::record("Quit chosen from menu");
                                     elwt.exit();
                                 }
                                 None => {}
