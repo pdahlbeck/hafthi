@@ -35,8 +35,8 @@ impl ContextMenu {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 300.0,
-            row_height: 34.0,
+            width: 340.0,
+            row_height: 42.0,
             hovered: None,
             entries: vec![
                 MenuEntry { label: "Copy", action: Some(MenuAction::Copy) },
@@ -66,7 +66,7 @@ impl ContextMenu {
         scale: f32,
         row_height: f32,
     ) {
-        self.width = 250.0 * scale;
+        self.width = 300.0 * scale;
         self.row_height = row_height.max(1.0);
         let height = self.height();
 
