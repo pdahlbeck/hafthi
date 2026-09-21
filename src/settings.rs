@@ -22,6 +22,7 @@ pub struct Settings {
     pub ansi: [Rgb; 16],
     pub branding_enabled: bool,
     pub branding_image: String,
+    pub branding_mode: String,
     pub branding_max_fps: u32,
 }
 
@@ -46,6 +47,7 @@ impl Default for Settings {
             selection_background: Rgb::new(205, 214, 220),
             branding_enabled: true,
             branding_image: "default".into(),
+            branding_mode: "full".into(),
             branding_max_fps: 8,
             ansi: [
                 Rgb::new(0, 0, 0),
@@ -181,6 +183,12 @@ impl Settings {
         if let Some(v) = get("branding", "image") {
             out.branding_image = v.to_string();
         }
+        if let Some(v) = get("branding", "mode") {
+            let mode = v.to_ascii_lowercase();
+            if matches!(mode.as_str(), "full" | "banner") {
+                out.branding_mode = mode;
+            }
+        }
         if let Some(v) = get("branding", "max_fps").and_then(|v| v.parse::<u32>().ok()) {
             out.branding_max_fps = v.clamp(1, 30);
         }
@@ -289,6 +297,7 @@ impl Settings {
             if self.branding_enabled { "true" } else { "false" },
         );
         set_key(&mut text, "branding", "image", &self.branding_image);
+        set_key(&mut text, "branding", "mode", &self.branding_mode);
         set_key(
             &mut text,
             "branding",
