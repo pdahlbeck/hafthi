@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Status:** active development. Linux/Wayland is the only supported platform for now.
+> **Version 0.7.4:** redesigned GPU-rendered preferences panel. Linux/Wayland is the only supported platform.
 
 ## Current stack
 
@@ -29,7 +29,7 @@ Hafþi grew out of the Footsole project, but the current codebase is a native GP
 - scrollback
 - right-click context menu
 - live font zoom
-- Preferences panel
+- GPU-rendered preferences panel styled to match the context menu\n- explicit Off / Banner / Full image display controls
 - transparency / opacity control
 - terminal padding control
 - configurable scrollback
@@ -47,7 +47,7 @@ Hafþi grew out of the Footsole project, but the current codebase is a native GP
 - URL detection / Open Link / Copy Link
 - broader terminal escape-sequence compatibility
 - installer/package integration
-- Preferences UI polish
+- keyboard navigation and accessibility for Preferences
 - performance profiling and long-session testing
 
 ## Install
@@ -66,7 +66,7 @@ The installer builds Hafþi in release mode and installs the complete desktop in
 
 The application therefore appears as **Hafþi** with its own icon in compatible Linux application launchers.
 
-To run directly from the source tree without installing:
+To update an existing clone and reinstall the newest version:\n\n```bash\ncd /path/to/hafthi\ngit pull\nbash install.sh\n```\n\nRestart Hafþi after installation. Your settings in `~/.config/hafthi/config.ini` remain in place.\n\nTo run directly from the source tree without installing:
 
 ```bash
 cargo run --release
