@@ -20,12 +20,19 @@ pub struct PtySession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
 }
 
+fn shell_command() -> CommandBuilder {
+    // A graphical launcher may omit SHELL. portable-pty resolves the login
+    // shell from the account database when it is absent.
+    let mut cmd = CommandBuilder::new_default_prog();
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "Hafthi");
+    cmd.env("HAFTHI", "1");
+    cmd
+}
+
 impl PtySession {
-    pub fn spawn(
-        cols: u16,
-        rows: u16,
-        proxy: EventLoopProxy<AppEvent>,
-    ) -> Result<Self> {
+    pub fn spawn(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -36,17 +43,9 @@ impl PtySession {
             })
             .context("failed to create PTY")?;
 
-        // The desktop launcher may have no SHELL in its environment. Let
-        // portable-pty resolve the user's login shell from the account database.
-        let mut cmd = CommandBuilder::new_default_prog();
-        cmd.env("TERM", "xterm-256color");
-        cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "Hafthi");
-        cmd.env("HAFTHI", "1");
-
         let mut child = pair
             .slave
-            .spawn_command(cmd)
+            .spawn_command(shell_command())
             .context("failed to spawn shell in PTY")?;
 
         drop(pair.slave);
@@ -103,5 +102,30 @@ impl PtySession {
             pixel_width,
             pixel_height,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn starts_account_shell_without_shell_environment() {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("open PTY");
+        let mut command = shell_command();
+        command.env_remove("SHELL");
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("start account shell");
+        child.kill().expect("stop test shell");
+        child.wait().expect("reap test shell");
     }
 }
