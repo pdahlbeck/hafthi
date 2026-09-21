@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.8:** supports high-DPI windows larger than the conservative 2048-pixel GPU texture limit and logs unsupported window sizes. Linux/Wayland is the only supported platform.
+> **Version 0.7.9:** redesigned preferences with a dark sidebar, blue accents, and separate Appearance, Terminal, and Background pages. Linux/Wayland is the only supported platform.
 
 ## Current stack
 
