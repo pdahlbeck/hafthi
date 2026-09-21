@@ -7,6 +7,7 @@ mod preferences;
 mod pty;
 mod settings;
 mod terminal;
+mod ui_theme;
 mod wayland_effect;
 
 use std::{sync::Arc, time::Instant};
@@ -24,6 +25,7 @@ use preferences::{PrefAction, PreferencesPanel};
 use pty::{AppEvent, PtySession};
 use settings::{config_path, Settings};
 use terminal::TerminalGrid;
+use ui_theme as ui;
 use wgpu::{
     Backends, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features,
     Instance, InstanceDescriptor, Limits, LoadOp, MultisampleState, Operations, PowerPreference,
@@ -249,13 +251,6 @@ struct GpuState {
     menu_buffer: Buffer,
     menu_icon_buffer: Buffer,
     menu_shortcut_buffer: Buffer,
-    prefs_buffer: Buffer,
-    prefs_minus_buffer: Buffer,
-    prefs_plus_buffer: Buffer,
-    prefs_toggle_buffer: Buffer,
-    prefs_choose_buffer: Buffer,
-    prefs_cancel_buffer: Buffer,
-    prefs_save_buffer: Buffer,
     rect_renderer: RectRenderer,
     background_renderer: BackgroundRenderer,
 }
@@ -375,38 +370,6 @@ impl GpuState {
         );
         menu_shortcut_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let mut prefs_buffer = Buffer::new(
-            &mut font_system,
-            Metrics::new(settings.font_size * 0.86, settings.line_height * 1.08),
-        );
-        prefs_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
-
-        let button_metrics = Metrics::new(settings.font_size * 0.72, settings.line_height * 0.96);
-
-        let mut prefs_minus_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_minus_buffer.set_text(&mut font_system, "−", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_minus_buffer.shape_until_scroll(&mut font_system);
-
-        let mut prefs_plus_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_plus_buffer.set_text(&mut font_system, "+", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_plus_buffer.shape_until_scroll(&mut font_system);
-
-        let mut prefs_toggle_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_toggle_buffer.set_text(&mut font_system, "Change", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_toggle_buffer.shape_until_scroll(&mut font_system);
-
-        let mut prefs_choose_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_choose_buffer.set_text(&mut font_system, "Choose image…", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_choose_buffer.shape_until_scroll(&mut font_system);
-
-        let mut prefs_cancel_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_cancel_buffer.set_text(&mut font_system, "Cancel", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_cancel_buffer.shape_until_scroll(&mut font_system);
-
-        let mut prefs_save_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_save_buffer.set_text(&mut font_system, "Save", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
-        prefs_save_buffer.shape_until_scroll(&mut font_system);
-
         Ok(Self {
             surface,
             device,
@@ -423,13 +386,6 @@ impl GpuState {
             menu_buffer,
             menu_icon_buffer,
             menu_shortcut_buffer,
-            prefs_buffer,
-            prefs_minus_buffer,
-            prefs_plus_buffer,
-            prefs_toggle_buffer,
-            prefs_choose_buffer,
-            prefs_cancel_buffer,
-            prefs_save_buffer,
             rect_renderer,
             background_renderer,
         })
@@ -452,18 +408,6 @@ impl GpuState {
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.menu_shortcut_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
-        self.prefs_buffer
-            .set_size(&mut self.font_system, size.width as f32, size.height as f32);
-        for buffer in [
-            &mut self.prefs_minus_buffer,
-            &mut self.prefs_plus_buffer,
-            &mut self.prefs_toggle_buffer,
-            &mut self.prefs_choose_buffer,
-            &mut self.prefs_cancel_buffer,
-            &mut self.prefs_save_buffer,
-        ] {
-            buffer.set_size(&mut self.font_system, size.width as f32, size.height as f32);
-        }
     }
 
     fn menu_line_height(&self) -> f32 {
@@ -504,21 +448,6 @@ impl GpuState {
             &mut self.font_system,
             Metrics::new(menu_font_size * 0.82, menu_line_height),
         );
-        self.prefs_buffer.set_metrics(
-            &mut self.font_system,
-            Metrics::new(font_size * 0.86, line_height * 1.08),
-        );
-        let button_metrics = Metrics::new(font_size * 0.72, line_height * 0.96);
-        for buffer in [
-            &mut self.prefs_minus_buffer,
-            &mut self.prefs_plus_buffer,
-            &mut self.prefs_toggle_buffer,
-            &mut self.prefs_choose_buffer,
-            &mut self.prefs_cancel_buffer,
-            &mut self.prefs_save_buffer,
-        ] {
-            buffer.set_metrics(&mut self.font_system, button_metrics);
-        }
     }
 
     fn background_deadline(&self) -> Option<Instant> {
@@ -535,39 +464,6 @@ impl GpuState {
             self.background_renderer
                 .advance(&self.queue, self.settings.branding_max_fps);
         }
-    }
-
-    fn preferences_text(&self) -> String {
-        let image_chars: Vec<char> = self.settings.branding_image.chars().collect();
-        let image = if image_chars.len() > 34 {
-            format!("…{}", image_chars[image_chars.len() - 33..].iter().collect::<String>())
-        } else {
-            self.settings.branding_image.clone()
-        };
-
-        format!(
-            "Font size                 {:.1} px\n\
-Transparency              {:>3}%\n\
-Padding                   {:.0} px\n\
-Scrollback                {:>6}\n\
-Image display             {:<8}\n\
-Image / GIF               {:<34}\n\
-GIF max FPS               {:>2}\n\
-\n",
-            self.settings.font_size,
-            (self.settings.opacity * 100.0).round() as u32,
-            self.settings.padding / self.settings.scale_factor.max(1.0),
-            self.settings.scrollback,
-            if !self.settings.branding_enabled {
-                "Off"
-            } else if self.settings.branding_mode == "banner" {
-                "Banner"
-            } else {
-                "Full"
-            },
-            image,
-            self.settings.branding_max_fps,
-        )
     }
 
     fn update_terminal_text(&mut self, terminal: &TerminalGrid) {
@@ -634,24 +530,6 @@ GIF max FPS               {:>2}\n\
             self.menu_shortcut_buffer.shape_until_scroll(&mut self.font_system);
         }
 
-        if prefs.visible {
-            let prefs_text = self.preferences_text();
-            self.prefs_buffer.set_text(
-                &mut self.font_system,
-                &prefs_text,
-                Attrs::new()
-                    .family(Family::Name(&self.settings.font_family))
-                    .color(Color::rgb(
-                        self.settings.foreground.r,
-                        self.settings.foreground.g,
-                        self.settings.foreground.b,
-                    )),
-                Shaping::Advanced,
-            );
-            self.prefs_buffer.shape_until_scroll(&mut self.font_system);
-
-        }
-
         let terminal_area = TextArea {
             buffer: &self.text_buffer,
             left: self.settings.padding,
@@ -671,65 +549,97 @@ GIF max FPS               {:>2}\n\
         };
 
         if prefs.visible {
-            let prefs_area = TextArea {
-                buffer: &self.prefs_buffer,
-                left: prefs.x + 18.0 * self.settings.scale_factor,
-                top: prefs.y + 10.0 * self.settings.scale_factor,
-                scale: 1.0,
-                bounds: TextBounds {
-                    left: prefs.x as i32,
-                    top: prefs.y as i32,
-                    right: (prefs.x + prefs.width) as i32,
-                    bottom: (prefs.y + prefs.height()) as i32,
-                },
-                default_color: Color::rgb(
-                    self.settings.foreground.r,
-                    self.settings.foreground.g,
-                    self.settings.foreground.b,
-                ),
+            let primary = Color::rgb(240, 241, 243);
+            let muted = Color::rgb(157, 161, 169);
+            let mut labels: Vec<(Buffer, f32, f32, TextBounds)> = Vec::new();
+            let mut add = |text: &str, x: f32, y: f32, width: f32, size: f32, color: Color| {
+                let (px, py) = prefs.pos(x, y);
+                let mut buffer = Buffer::new(
+                    &mut self.font_system,
+                    Metrics::new(size * prefs.scale, size * 1.35 * prefs.scale),
+                );
+                buffer.set_size(&mut self.font_system, width * prefs.scale, 38.0 * prefs.scale);
+                buffer.set_text(
+                    &mut self.font_system, text,
+                    Attrs::new().family(Family::SansSerif).color(color),
+                    Shaping::Advanced,
+                );
+                buffer.shape_until_scroll(&mut self.font_system);
+                labels.push((buffer, px, py, TextBounds {
+                    left: px as i32, top: py as i32,
+                    right: (px + width * prefs.scale) as i32,
+                    bottom: (py + 38.0 * prefs.scale) as i32,
+                }));
             };
 
-            let mut areas = vec![terminal_area, prefs_area];
-
+            add("Settings", 24.0, 19.0, 400.0, 21.0, primary);
+            add("Appearance and background", 24.0, 52.0, 400.0, 12.0, muted);
+            for (title, y) in [("APPEARANCE", 86.0), ("TERMINAL", 253.0), ("BACKGROUND", 332.0)] {
+                add(title, 24.0, y, 250.0, 11.0, muted);
+            }
+            for (name, y) in [
+                ("Font size", 119.0), ("Transparency", 163.0),
+                ("Padding", 207.0), ("Scrollback", 286.0),
+                ("Image display", 365.0), ("Image / GIF", 422.0),
+                ("GIF max FPS", 493.0),
+            ] {
+                add(name, 24.0, y, 180.0, 15.0, primary);
+            }
+            for (value, y) in [
+                (format!("{:.1} px", self.settings.font_size), 119.0),
+                (format!("{}%", (self.settings.opacity * 100.0).round() as u32), 163.0),
+                (format!("{:.0} px", self.settings.logical_padding()), 207.0),
+                (self.settings.scrollback.to_string(), 286.0),
+                (self.settings.branding_max_fps.to_string(), 493.0),
+            ] {
+                add(&value, 420.0, y, 125.0, 14.0, muted);
+            }
+            let image = &self.settings.branding_image;
+            let filename = std::path::Path::new(image).file_name()
+                .and_then(|name| name.to_str()).unwrap_or(image);
+            let filename = truncate_label(filename, 30);
+            let path = if image == "default" || image.is_empty() {
+                "No image selected".to_string()
+            } else {
+                truncate_label(image, 44)
+            };
+            add(&filename, 205.0, 410.0, 275.0, 14.0, primary);
+            add(&path, 205.0, 442.0, 275.0, 11.0, muted);
             for button in prefs.button_rects() {
-                let (buffer, x_factor) = match button.action {
+                let caption = match button.action {
                     PrefAction::FontDown
                     | PrefAction::OpacityDown
                     | PrefAction::PaddingDown
                     | PrefAction::ScrollbackDown
-                    | PrefAction::GifFpsDown => (&self.prefs_minus_buffer, 0.43),
-
+                    | PrefAction::GifFpsDown => "−",
                     PrefAction::FontUp
                     | PrefAction::OpacityUp
                     | PrefAction::PaddingUp
                     | PrefAction::ScrollbackUp
-                    | PrefAction::GifFpsUp => (&self.prefs_plus_buffer, 0.43),
-
-                    PrefAction::ToggleBranding => (&self.prefs_toggle_buffer, 0.16),
-                    PrefAction::ChooseImage => (&self.prefs_choose_buffer, 0.10),
-                    PrefAction::Cancel => (&self.prefs_cancel_buffer, 0.20),
-                    PrefAction::Save => (&self.prefs_save_buffer, 0.28),
+                    | PrefAction::GifFpsUp => "+",
+                    PrefAction::ImageOff => "Off",
+                    PrefAction::ImageBanner => "Banner",
+                    PrefAction::ImageFull => "Full",
+                    PrefAction::ChooseImage => "Choose…",
+                    PrefAction::ClearImage => "Clear",
+                    PrefAction::Cancel => "Cancel",
+                    PrefAction::Save => "Save",
                 };
-
-                areas.push(TextArea {
-                    buffer,
-                    left: button.x + button.w * x_factor,
-                    top: button.y,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: button.x as i32,
-                        top: button.y as i32,
-                        right: (button.x + button.w) as i32,
-                        bottom: (button.y + button.h) as i32,
-                    },
-                    default_color: Color::rgb(
-                        self.settings.foreground.r,
-                        self.settings.foreground.g,
-                        self.settings.foreground.b,
-                    ),
-                });
+                let font_size = if caption == "+" || caption == "−" { 18.0 } else { 13.0 };
+                let text_width = caption.chars().count() as f32 * font_size * 0.54 * prefs.scale;
+                let x = (button.x + (button.w - text_width) / 2.0 - prefs.x) / prefs.scale;
+                let y = (button.y - prefs.y) / prefs.scale + if font_size > 13.0 { 3.0 } else { 8.0 };
+                let color = if button.action == PrefAction::Save {
+                    Color::rgb(24, 26, 29)
+                } else { primary };
+                add(caption, x, y, button.w / prefs.scale, font_size, color);
             }
-
+            drop(add);
+            let mut areas = vec![terminal_area];
+            areas.extend(labels.iter().map(|(buffer, x, y, bounds)| TextArea {
+                buffer, left: *x, top: *y, scale: 1.0,
+                bounds: *bounds, default_color: primary,
+            }));
             self.text_renderer
                 .prepare(
                     &self.device,
@@ -887,38 +797,68 @@ GIF max FPS               {:>2}\n\
         }
 
         if prefs.visible {
-            RectRenderer::push_rect(
+            let scale = prefs.scale;
+            RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
-                prefs.x,
-                prefs.y,
-                prefs.width,
-                prefs.height(),
-                [0.965, 0.957, 0.945, 1.0],
+                prefs.x - scale, prefs.y - scale,
+                prefs.width + 2.0 * scale, prefs.height() + 2.0 * scale,
+                (ui::PANEL_RADIUS + 1.0) * scale, ui::PANEL_BORDER,
             );
-
-            for button in prefs.button_rects() {
+            RectRenderer::push_rounded_rect(
+                &mut rect_vertices,
+                self.config.width,
+                self.config.height,
+                prefs.x, prefs.y, prefs.width, prefs.height(),
+                ui::PANEL_RADIUS * scale, ui::PANEL_SURFACE,
+            );
+            if let Some(row) = prefs.hovered_row {
+                let (x, y, w, h) = prefs.row_rect(row);
+                RectRenderer::push_rounded_rect(
+                    &mut rect_vertices, self.config.width, self.config.height,
+                    x, y, w, h, ui::CONTROL_RADIUS * scale, ui::HOVER,
+                );
+            }
+            for y in [77.0, 244.0, 323.0, 534.0] {
+                let (x, y) = prefs.pos(24.0, y);
                 RectRenderer::push_rect(
-                    &mut rect_vertices,
-                    self.config.width,
-                    self.config.height,
-                    button.x,
-                    button.y,
-                    button.w,
-                    button.h,
+                    &mut rect_vertices, self.config.width, self.config.height,
+                    x, y, prefs.width - 48.0 * scale, scale.max(1.0), ui::DIVIDER,
+                );
+            }
+            let selected = if !self.settings.branding_enabled {
+                PrefAction::ImageOff
+            } else if self.settings.branding_mode == "banner" {
+                PrefAction::ImageBanner
+            } else {
+                PrefAction::ImageFull
+            };
+            for button in prefs.button_rects() {
+                let color = if button.action == PrefAction::Save {
                     if prefs.hovered == Some(button.action) {
-                        [0.78, 0.84, 0.90, 1.0]
+                        [1.0, 1.0, 1.0, 1.0]
                     } else {
-                        [0.89, 0.89, 0.87, 1.0]
-                    },
+                        [0.91, 0.92, 0.93, 1.0]
+                    }
+                } else if prefs.hovered == Some(button.action) {
+                    ui::HOVER
+                } else if button.action == selected {
+                    ui::ACTIVE
+                } else {
+                    ui::CONTROL
+                };
+                RectRenderer::push_rounded_rect(
+                    &mut rect_vertices, self.config.width, self.config.height,
+                    button.x, button.y, button.w, button.h,
+                    ui::CONTROL_RADIUS * scale, color,
                 );
             }
         }
 
         if menu.visible {
             let scale = self.settings.scale_factor.max(1.0);
-            let radius = 10.0 * scale;
+            let radius = ui::PANEL_RADIUS * scale;
 
             // A subtle edge plus a charcoal surface gives the menu the same
             // modern visual weight as contemporary KDE/Wayland menus.
@@ -931,7 +871,7 @@ GIF max FPS               {:>2}\n\
                 menu.width + 2.0 * scale,
                 menu.height() + 2.0 * scale,
                 radius + 1.0 * scale,
-                [0.32, 0.33, 0.35, 0.92],
+                ui::PANEL_BORDER,
             );
             RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
@@ -942,7 +882,7 @@ GIF max FPS               {:>2}\n\
                 menu.width,
                 menu.height(),
                 radius,
-                [0.045, 0.048, 0.054, 0.992],
+                ui::PANEL_SURFACE,
             );
 
             if let Some(index) = menu.hovered {
@@ -954,8 +894,8 @@ GIF max FPS               {:>2}\n\
                     menu.y + index as f32 * menu.row_height + 4.0 * scale,
                     menu.width - 14.0 * scale,
                     menu.row_height - 8.0 * scale,
-                    6.0 * scale,
-                    [0.135, 0.145, 0.165, 0.985],
+                    ui::CONTROL_RADIUS * scale,
+                    ui::HOVER,
                 );
             }
 
@@ -970,7 +910,7 @@ GIF max FPS               {:>2}\n\
                         y - 0.5 * scale,
                         menu.width - 32.0 * scale,
                         1.0 * scale,
-                        [0.28, 0.29, 0.31, 0.72],
+                        ui::DIVIDER,
                     );
                 }
             }
@@ -1087,6 +1027,14 @@ GIF max FPS               {:>2}\n\
 
 fn banner_height(settings: &Settings) -> f32 {
     180.0 * settings.scale_factor.max(1.0)
+}
+
+fn truncate_label(value: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    if chars.len() <= max_chars {
+        return value.to_string();
+    }
+    format!("…{}", chars[chars.len() - (max_chars - 1)..].iter().collect::<String>())
 }
 
 fn terminal_top(settings: &Settings) -> f32 {
@@ -1475,14 +1423,20 @@ fn main() -> Result<()> {
                                     settings.scrollback = settings.scrollback.saturating_add(1000).min(100_000);
                                     terminal.set_scrollback_limit(settings.scrollback);
                                 }
-                                Some(PrefAction::ToggleBranding) => {
-                                    if !settings.branding_enabled {
-                                        settings.branding_enabled = true;
-                                        settings.branding_mode = "full".into();
-                                    } else if settings.branding_mode == "full" {
-                                        settings.branding_mode = "banner".into();
-                                    } else {
-                                        settings.branding_enabled = false;
+                                Some(PrefAction::ImageOff)
+                                | Some(PrefAction::ImageBanner)
+                                | Some(PrefAction::ImageFull) => {
+                                    match action.unwrap() {
+                                        PrefAction::ImageOff => settings.branding_enabled = false,
+                                        PrefAction::ImageBanner => {
+                                            settings.branding_enabled = true;
+                                            settings.branding_mode = "banner".into();
+                                        }
+                                        PrefAction::ImageFull => {
+                                            settings.branding_enabled = true;
+                                            settings.branding_mode = "full".into();
+                                        }
+                                        _ => unreachable!(),
                                     }
                                     gpu.apply_settings(settings.clone());
 
@@ -1517,6 +1471,11 @@ fn main() -> Result<()> {
                                         let _ =
                                             dialog_proxy.send_event(AppEvent::ImageChosen(chosen));
                                     });
+                                }
+                                Some(PrefAction::ClearImage) => {
+                                    settings.branding_image = "default".into();
+                                    settings.branding_enabled = false;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::GifFpsDown) => {
                                     settings.branding_max_fps = settings.branding_max_fps.saturating_sub(1).max(1);
@@ -1720,6 +1679,9 @@ fn main() -> Result<()> {
                 }
                 WindowEvent::Resized(size) => {
                     gpu.resize(size);
+                    if preferences.visible && size.width > 0 && size.height > 0 {
+                        preferences.open(size.width, size.height, settings.scale_factor);
+                    }
 
                     let (cols, rows) = grid_size(size, &settings);
                     let (old_cols, old_rows) = terminal.dimensions();
