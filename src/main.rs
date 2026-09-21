@@ -445,9 +445,14 @@ impl GpuState {
     }
 
     fn apply_settings(&mut self, settings: Settings) {
+        let reload_background = settings.branding_enabled
+            && (!self.settings.branding_enabled
+                || settings.branding_image != self.settings.branding_image);
+        let font_changed = settings.font_size != self.settings.font_size
+            || settings.line_height != self.settings.line_height;
         self.settings = settings;
 
-        if self.settings.branding_enabled {
+        if reload_background {
             if let Err(err) = self.background_renderer.load(
                 &self.device,
                 &self.queue,
@@ -455,6 +460,10 @@ impl GpuState {
             ) {
                 eprintln!("Hafþi background: {err:#}");
             }
+        }
+
+        if !font_changed {
+            return;
         }
 
         let font_size = self.settings.font_size;
