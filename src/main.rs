@@ -247,6 +247,7 @@ struct GpuState {
     text_renderer: TextRenderer,
     text_buffer: Buffer,
     menu_buffer: Buffer,
+    menu_icon_buffer: Buffer,
     menu_shortcut_buffer: Buffer,
     prefs_buffer: Buffer,
     prefs_minus_buffer: Buffer,
@@ -356,16 +357,21 @@ impl GpuState {
         );
         text_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let menu_font_size = settings.font_size * 0.80;
-        let menu_line_height = settings.line_height * 1.05;
+        let menu_font_size = settings.font_size * 0.88;
+        let menu_line_height = settings.line_height * 1.18;
         let mut menu_buffer = Buffer::new(
             &mut font_system,
             Metrics::new(menu_font_size, menu_line_height),
         );
         menu_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
+        let mut menu_icon_buffer = Buffer::new(
+            &mut font_system,
+            Metrics::new(menu_font_size * 0.92, menu_line_height),
+        );
+        menu_icon_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
         let mut menu_shortcut_buffer = Buffer::new(
             &mut font_system,
-            Metrics::new(menu_font_size * 0.86, menu_line_height),
+            Metrics::new(menu_font_size * 0.82, menu_line_height),
         );
         menu_shortcut_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
@@ -415,6 +421,7 @@ impl GpuState {
             text_renderer,
             text_buffer,
             menu_buffer,
+            menu_icon_buffer,
             menu_shortcut_buffer,
             prefs_buffer,
             prefs_minus_buffer,
@@ -441,6 +448,8 @@ impl GpuState {
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.menu_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
+        self.menu_icon_buffer
+            .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.menu_shortcut_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.prefs_buffer
@@ -458,7 +467,7 @@ impl GpuState {
     }
 
     fn menu_line_height(&self) -> f32 {
-        self.settings.line_height * 1.05
+        self.settings.line_height * 1.18
     }
 
     fn apply_settings(&mut self, settings: Settings) {
@@ -476,8 +485,8 @@ impl GpuState {
 
         let font_size = self.settings.font_size;
         let line_height = self.settings.line_height;
-        let menu_font_size = font_size * 0.80;
-        let menu_line_height = line_height * 1.05;
+        let menu_font_size = font_size * 0.88;
+        let menu_line_height = line_height * 1.18;
 
         self.text_buffer.set_metrics(
             &mut self.font_system,
@@ -487,9 +496,13 @@ impl GpuState {
             &mut self.font_system,
             Metrics::new(menu_font_size, menu_line_height),
         );
+        self.menu_icon_buffer.set_metrics(
+            &mut self.font_system,
+            Metrics::new(menu_font_size * 0.92, menu_line_height),
+        );
         self.menu_shortcut_buffer.set_metrics(
             &mut self.font_system,
-            Metrics::new(menu_font_size * 0.86, menu_line_height),
+            Metrics::new(menu_font_size * 0.82, menu_line_height),
         );
         self.prefs_buffer.set_metrics(
             &mut self.font_system,
@@ -588,22 +601,34 @@ GIF max FPS               {:>2}\n\
         self.advance_background();
 
         if menu.visible {
+            let ui_attrs = Attrs::new()
+                .family(Family::SansSerif)
+                .color(Color::rgb(240, 241, 243));
+
             self.menu_buffer.set_text(
                 &mut self.font_system,
                 &menu.text(),
-                Attrs::new()
-                    .family(Family::Name(&self.settings.font_family))
-                    .color(Color::rgb(238, 238, 240)),
+                ui_attrs,
                 Shaping::Advanced,
             );
             self.menu_buffer.shape_until_scroll(&mut self.font_system);
+
+            self.menu_icon_buffer.set_text(
+                &mut self.font_system,
+                &menu.icons(),
+                Attrs::new()
+                    .family(Family::SansSerif)
+                    .color(Color::rgb(213, 216, 221)),
+                Shaping::Advanced,
+            );
+            self.menu_icon_buffer.shape_until_scroll(&mut self.font_system);
 
             self.menu_shortcut_buffer.set_text(
                 &mut self.font_system,
                 &menu.shortcuts(),
                 Attrs::new()
-                    .family(Family::Name(&self.settings.font_family))
-                    .color(Color::rgb(165, 168, 174)),
+                    .family(Family::SansSerif)
+                    .color(Color::rgb(157, 161, 169)),
                 Shaping::Advanced,
             );
             self.menu_shortcut_buffer.shape_until_scroll(&mut self.font_system);
@@ -720,31 +745,45 @@ GIF max FPS               {:>2}\n\
                 )
                 .context("failed to prepare GPU text")?;
         } else if menu.visible {
-            let menu_area = TextArea {
-                buffer: &self.menu_buffer,
-                left: menu.x + 22.0 * self.settings.scale_factor,
+            let scale = self.settings.scale_factor.max(1.0);
+            let icon_area = TextArea {
+                buffer: &self.menu_icon_buffer,
+                left: menu.x + 20.0 * scale,
                 top: menu.y,
                 scale: 1.0,
                 bounds: TextBounds {
                     left: menu.x as i32,
                     top: menu.y as i32,
-                    right: (menu.x + menu.width) as i32,
+                    right: (menu.x + 54.0 * scale) as i32,
                     bottom: (menu.y + menu.height()) as i32,
                 },
-                default_color: Color::rgb(238, 238, 240),
+                default_color: Color::rgb(213, 216, 221),
+            };
+            let menu_area = TextArea {
+                buffer: &self.menu_buffer,
+                left: menu.x + 58.0 * scale,
+                top: menu.y,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: (menu.x + 54.0 * scale) as i32,
+                    top: menu.y as i32,
+                    right: (menu.x + menu.width - 175.0 * scale) as i32,
+                    bottom: (menu.y + menu.height()) as i32,
+                },
+                default_color: Color::rgb(240, 241, 243),
             };
             let shortcut_area = TextArea {
                 buffer: &self.menu_shortcut_buffer,
-                left: menu.x + menu.width - 170.0 * self.settings.scale_factor,
+                left: menu.x + menu.width - 168.0 * scale,
                 top: menu.y,
                 scale: 1.0,
                 bounds: TextBounds {
-                    left: menu.x as i32,
+                    left: (menu.x + menu.width - 174.0 * scale) as i32,
                     top: menu.y as i32,
-                    right: (menu.x + menu.width - 18.0 * self.settings.scale_factor) as i32,
+                    right: (menu.x + menu.width - 20.0 * scale) as i32,
                     bottom: (menu.y + menu.height()) as i32,
                 },
-                default_color: Color::rgb(165, 168, 174),
+                default_color: Color::rgb(157, 161, 169),
             };
 
             self.text_renderer
@@ -757,7 +796,7 @@ GIF max FPS               {:>2}\n\
                         width: self.config.width,
                         height: self.config.height,
                     },
-                    [terminal_area, menu_area, shortcut_area],
+                    [terminal_area, icon_area, menu_area, shortcut_area],
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
@@ -903,7 +942,7 @@ GIF max FPS               {:>2}\n\
                 menu.width,
                 menu.height(),
                 radius,
-                [0.055, 0.058, 0.064, 0.985],
+                [0.045, 0.048, 0.054, 0.992],
             );
 
             if let Some(index) = menu.hovered {
@@ -916,7 +955,7 @@ GIF max FPS               {:>2}\n\
                     menu.width - 14.0 * scale,
                     menu.row_height - 8.0 * scale,
                     6.0 * scale,
-                    [0.16, 0.17, 0.19, 0.98],
+                    [0.135, 0.145, 0.165, 0.985],
                 );
             }
 
