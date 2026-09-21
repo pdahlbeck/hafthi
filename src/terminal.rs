@@ -289,10 +289,18 @@ impl TerminalGrid {
         let copy_rows = rows.min(old_rows);
         let copy_cols = cols.min(old_cols);
 
-        // Terminal zoom/resize should keep the live prompt anchored near the
-        // bottom of the viewport. Copy the newest visible rows, not the oldest.
-        let old_first = old_rows.saturating_sub(copy_rows);
-        let new_first = rows.saturating_sub(copy_rows);
+        // A newly started terminal must remain anchored at the top-left.
+        // Once terminal output has progressed beyond the first row (or there is
+        // scrollback), preserve the existing bottom-anchored resize behaviour.
+        let initial_screen = self.history.is_empty() && self.cursor_y == 0;
+        let (old_first, new_first) = if initial_screen {
+            (0, 0)
+        } else {
+            (
+                old_rows.saturating_sub(copy_rows),
+                rows.saturating_sub(copy_rows),
+            )
+        };
 
         for i in 0..copy_rows {
             let old_y = old_first + i;
