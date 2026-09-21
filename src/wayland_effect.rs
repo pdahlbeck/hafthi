@@ -123,7 +123,7 @@ mod imp {
 
             let _ = conn.flush();
 
-            eprintln!("Hafthi: ext-background-effect-v1 no-blur attached");
+            eprintln!("Hafþi: ext-background-effect-v1 no-blur attached");
 
             Some(Self {
                 conn,
