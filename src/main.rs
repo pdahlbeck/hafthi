@@ -330,7 +330,7 @@ impl GpuState {
         prefs_plus_buffer.shape_until_scroll(&mut font_system);
 
         let mut prefs_toggle_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_toggle_buffer.set_text(&mut font_system, "On / Off", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
+        prefs_toggle_buffer.set_text(&mut font_system, "Change", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
         prefs_toggle_buffer.shape_until_scroll(&mut font_system);
 
         let mut prefs_choose_buffer = Buffer::new(&mut font_system, button_metrics);
@@ -482,7 +482,13 @@ GIF max FPS               {:>2}\n\
             (self.settings.opacity * 100.0).round() as u32,
             self.settings.padding / self.settings.scale_factor.max(1.0),
             self.settings.scrollback,
-            if self.settings.branding_enabled { "On" } else { "Off" },
+            if !self.settings.branding_enabled {
+                "Off"
+            } else if self.settings.branding_mode == "banner" {
+                "Banner"
+            } else {
+                "Full"
+            },
             image,
             self.settings.branding_max_fps,
         )
@@ -555,7 +561,7 @@ GIF max FPS               {:>2}\n\
         let terminal_area = TextArea {
             buffer: &self.text_buffer,
             left: self.settings.padding,
-            top: self.settings.padding,
+            top: terminal_top(&self.settings),
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -708,7 +714,7 @@ GIF max FPS               {:>2}\n\
                 let end_col = if row == b.1 { b.0 } else { terminal.dimensions().0.saturating_sub(1) };
 
                 let x = self.settings.padding + start_col as f32 * self.settings.cell_width;
-                let y = self.settings.padding + row as f32 * self.settings.line_height;
+                let y = terminal_top(&self.settings) + row as f32 * self.settings.line_height;
                 let width =
                     (end_col.saturating_sub(start_col) + 1) as f32 * self.settings.cell_width;
 
@@ -756,7 +762,7 @@ GIF max FPS               {:>2}\n\
                 self.config.width,
                 self.config.height,
                 self.settings.padding + cursor_x,
-                self.settings.padding + cy as f32 * self.settings.line_height,
+                terminal_top(&self.settings) + cy as f32 * self.settings.line_height,
                 cursor_w.max(1.0),
                 self.settings.line_height,
                 Settings::rgba_f32(self.settings.cursor, 0.55),
@@ -875,12 +881,40 @@ GIF max FPS               {:>2}\n\
             });
 
             if self.settings.branding_enabled {
-                self.background_renderer.draw(
-                    &mut pass,
-                    &self.queue,
-                    self.config.width,
-                    self.config.height,
-                    self.settings.opacity as f32,
+                if self.settings.branding_mode == "banner" {
+                    let x = self.settings.padding;
+                    let y = self.settings.padding;
+                    let width = (520.0 * self.settings.scale_factor.max(1.0))
+                        .min((self.config.width as f32 - self.settings.padding * 2.0).max(1.0));
+                    let height = banner_height(&self.settings)
+                        .min((self.config.height as f32 - self.settings.padding * 3.0).max(1.0));
+                    self.background_renderer.draw(
+                        &mut pass,
+                        &self.queue,
+                        x,
+                        y,
+                        width,
+                        height,
+                        1.0,
+                    );
+                } else {
+                    self.background_renderer.draw(
+                        &mut pass,
+                        &self.queue,
+                        0.0,
+                        0.0,
+                        self.config.width as f32,
+                        self.config.height as f32,
+                        self.settings.opacity as f32,
+                    );
+                }
+                pass.set_viewport(
+                    0.0,
+                    0.0,
+                    self.config.width as f32,
+                    self.config.height as f32,
+                    0.0,
+                    1.0,
                 );
             }
 
@@ -901,9 +935,25 @@ GIF max FPS               {:>2}\n\
     }
 }
 
+fn banner_height(settings: &Settings) -> f32 {
+    180.0 * settings.scale_factor.max(1.0)
+}
+
+fn terminal_top(settings: &Settings) -> f32 {
+    if settings.branding_enabled
+        && settings.branding_mode == "banner"
+        && !settings.branding_image.is_empty()
+        && settings.branding_image != "default"
+    {
+        settings.padding * 2.0 + banner_height(settings)
+    } else {
+        settings.padding
+    }
+}
+
 fn grid_size(size: PhysicalSize<u32>, settings: &Settings) -> (u16, u16) {
     let usable_w = (size.width as f32 - settings.padding * 2.0).max(settings.cell_width);
-    let usable_h = (size.height as f32 - settings.padding * 2.0).max(settings.line_height);
+    let usable_h = (size.height as f32 - terminal_top(settings) - settings.padding).max(settings.line_height);
     let cols = (usable_w / settings.cell_width).floor().max(1.0) as u16;
     let rows = (usable_h / settings.line_height).floor().max(1.0) as u16;
     (cols, rows)
@@ -918,7 +968,7 @@ fn mouse_to_cell(
     let x =
         (((position.x as f32) - settings.padding).max(0.0) / settings.cell_width).floor() as usize;
     let y =
-        (((position.y as f32) - settings.padding).max(0.0) / settings.line_height).floor() as usize;
+        (((position.y as f32) - terminal_top(settings)).max(0.0) / settings.line_height).floor() as usize;
     (
         x.min(cols.saturating_sub(1)),
         y.min(rows.saturating_sub(1)),
@@ -1067,8 +1117,23 @@ fn main() -> Result<()> {
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
                 if let Some(path) = path {
                     settings.branding_image = path;
-                    settings.branding_enabled = true;
+                    if !settings.branding_enabled {
+                        settings.branding_enabled = true;
+                        settings.branding_mode = "banner".into();
+                    }
                     gpu.apply_settings(settings.clone());
+
+                    let size = window.inner_size();
+                    let (cols, rows) = grid_size(size, &settings);
+                    terminal.resize(cols as usize, rows as usize);
+                    terminal.set_scrollback_limit(settings.scrollback);
+                    pty.resize(
+                        cols,
+                        rows,
+                        size.width.min(u16::MAX as u32) as u16,
+                        size.height.min(u16::MAX as u32) as u16,
+                    );
+                    gpu.update_terminal_text(&terminal);
                     dirty = true;
                     window.request_redraw();
                 }
@@ -1261,8 +1326,27 @@ fn main() -> Result<()> {
                                     terminal.set_scrollback_limit(settings.scrollback);
                                 }
                                 Some(PrefAction::ToggleBranding) => {
-                                    settings.branding_enabled = !settings.branding_enabled;
+                                    if !settings.branding_enabled {
+                                        settings.branding_enabled = true;
+                                        settings.branding_mode = "banner".into();
+                                    } else if settings.branding_mode == "banner" {
+                                        settings.branding_mode = "full".into();
+                                    } else {
+                                        settings.branding_enabled = false;
+                                    }
                                     gpu.apply_settings(settings.clone());
+
+                                    let size = window.inner_size();
+                                    let (cols, rows) = grid_size(size, &settings);
+                                    terminal.resize(cols as usize, rows as usize);
+                                    terminal.set_scrollback_limit(settings.scrollback);
+                                    pty.resize(
+                                        cols,
+                                        rows,
+                                        size.width.min(u16::MAX as u32) as u16,
+                                        size.height.min(u16::MAX as u32) as u16,
+                                    );
+                                    gpu.update_terminal_text(&terminal);
                                 }
                                 Some(PrefAction::ChooseImage) => {
                                     // Use rfd's asynchronous portal API off the winit event
