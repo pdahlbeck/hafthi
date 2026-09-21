@@ -8,8 +8,11 @@ pub enum PrefAction {
     PaddingUp,
     ScrollbackDown,
     ScrollbackUp,
-    ToggleBranding,
+    ImageOff,
+    ImageBanner,
+    ImageFull,
     ChooseImage,
+    ClearImage,
     GifFpsDown,
     GifFpsUp,
     Save,
@@ -37,118 +40,124 @@ pub struct PreferencesPanel {
     pub x: f32,
     pub y: f32,
     pub width: f32,
-    pub row_height: f32,
+    pub scale: f32,
     pub hovered: Option<PrefAction>,
+    pub hovered_row: Option<usize>,
 }
 
 impl PreferencesPanel {
+    pub const WIDTH: f32 = 680.0;
+    pub const HEIGHT: f32 = 596.0;
+    pub const ROWS: [(f32, f32); 7] = [
+        (110.0, 44.0),
+        (154.0, 44.0),
+        (198.0, 44.0),
+        (277.0, 44.0),
+        (356.0, 44.0),
+        (404.0, 76.0),
+        (484.0, 44.0),
+    ];
+
     pub fn new() -> Self {
         Self {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 820.0,
-            row_height: 68.0,
+            width: Self::WIDTH,
+            scale: 1.0,
             hovered: None,
+            hovered_row: None,
         }
     }
 
     pub fn open(&mut self, surface_width: u32, surface_height: u32, scale: f32) {
-        self.width = 820.0 * scale;
-        self.row_height = 68.0 * scale;
-        let height = self.height();
-        self.x = ((surface_width as f32 - self.width) / 2.0).max(8.0);
-        self.y = ((surface_height as f32 - height) / 2.0).max(8.0);
+        // Fit all controls into the current terminal, even after a resize.
+        self.scale = scale
+            .max(0.1)
+            .min((surface_width as f32 - 16.0).max(1.0) / Self::WIDTH)
+            .min((surface_height as f32 - 16.0).max(1.0) / Self::HEIGHT);
+        self.width = Self::WIDTH * self.scale;
+        self.x = (surface_width as f32 - self.width) / 2.0;
+        self.y = (surface_height as f32 - self.height()) / 2.0;
         self.visible = true;
         self.hovered = None;
+        self.hovered_row = None;
     }
 
     pub fn close(&mut self) {
         self.visible = false;
         self.hovered = None;
+        self.hovered_row = None;
     }
 
     pub fn height(&self) -> f32 {
-        self.row_height * 8.0
+        Self::HEIGHT * self.scale
+    }
+
+    pub fn pos(&self, x: f32, y: f32) -> (f32, f32) {
+        (self.x + x * self.scale, self.y + y * self.scale)
+    }
+
+    pub fn row_rect(&self, index: usize) -> (f32, f32, f32, f32) {
+        let (top, height) = Self::ROWS[index];
+        let (x, y) = self.pos(8.0, top);
+        (x, y, self.width - 16.0 * self.scale, height * self.scale)
     }
 
     pub fn button_rects(&self) -> Vec<HitRect> {
-        let small_w = self.width * 0.12;
-        let gap = self.width * 0.025;
-        let plus_x = self.x + self.width - gap - small_w;
-        let minus_x = plus_x - gap - small_w;
-        let button_h = self.row_height * 0.72;
-        let y_inset = (self.row_height - button_h) / 2.0;
-        let wide_w = small_w * 2.0 + gap;
-
-        let row_button = |row: usize, x: f32, action: PrefAction| HitRect {
-            x,
-            y: self.y + row as f32 * self.row_height + y_inset,
-            w: small_w,
-            h: button_h,
-            action,
+        use PrefAction::*;
+        let mut buttons = Vec::with_capacity(17);
+        let mut add = |x: f32, y: f32, w: f32, h: f32, action| {
+            let (x, y) = self.pos(x, y);
+            buttons.push(HitRect {
+                x,
+                y,
+                w: w * self.scale,
+                h: h * self.scale,
+                action,
+            });
         };
-
-        vec![
-            row_button(0, minus_x, PrefAction::FontDown),
-            row_button(0, plus_x, PrefAction::FontUp),
-            row_button(1, minus_x, PrefAction::OpacityDown),
-            row_button(1, plus_x, PrefAction::OpacityUp),
-            row_button(2, minus_x, PrefAction::PaddingDown),
-            row_button(2, plus_x, PrefAction::PaddingUp),
-            row_button(3, minus_x, PrefAction::ScrollbackDown),
-            row_button(3, plus_x, PrefAction::ScrollbackUp),
-            HitRect {
-                x: minus_x,
-                y: self.y + 4.0 * self.row_height + y_inset,
-                w: wide_w,
-                h: button_h,
-                action: PrefAction::ToggleBranding,
-            },
-            HitRect {
-                x: minus_x,
-                y: self.y + 5.0 * self.row_height + y_inset,
-                w: wide_w,
-                h: button_h,
-                action: PrefAction::ChooseImage,
-            },
-            row_button(6, minus_x, PrefAction::GifFpsDown),
-            row_button(6, plus_x, PrefAction::GifFpsUp),
-            HitRect {
-                x: self.x + self.width * 0.50,
-                y: self.y + 7.0 * self.row_height + y_inset,
-                w: self.width * 0.21,
-                h: button_h,
-                action: PrefAction::Cancel,
-            },
-            HitRect {
-                x: self.x + self.width * 0.74,
-                y: self.y + 7.0 * self.row_height + y_inset,
-                w: self.width * 0.21,
-                h: button_h,
-                action: PrefAction::Save,
-            },
-        ]
+        for (row, down, up) in [
+            (0, FontDown, FontUp),
+            (1, OpacityDown, OpacityUp),
+            (2, PaddingDown, PaddingUp),
+            (3, ScrollbackDown, ScrollbackUp),
+            (6, GifFpsDown, GifFpsUp),
+        ] {
+            let y = Self::ROWS[row].0 + 5.0;
+            add(568.0, y, 34.0, 34.0, down);
+            add(610.0, y, 34.0, 34.0, up);
+        }
+        add(416.0, 361.0, 68.0, 34.0, ImageOff);
+        add(484.0, 361.0, 88.0, 34.0, ImageBanner);
+        add(572.0, 361.0, 72.0, 34.0, ImageFull);
+        add(490.0, 422.0, 92.0, 34.0, ChooseImage);
+        add(590.0, 422.0, 54.0, 34.0, ClearImage);
+        add(468.0, 546.0, 82.0, 36.0, Cancel);
+        add(558.0, 546.0, 86.0, 36.0, Save);
+        buttons
     }
 
     pub fn update_hover(&mut self, x: f32, y: f32) -> bool {
-        let old = self.hovered;
+        let old = (self.hovered, self.hovered_row);
         self.hovered = self
             .button_rects()
             .into_iter()
             .find(|rect| rect.contains(x, y))
             .map(|rect| rect.action);
-        old != self.hovered
+        self.hovered_row = (0..Self::ROWS.len()).find(|&i| {
+            let (rx, ry, rw, rh) = self.row_rect(i);
+            x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
+        });
+        old != (self.hovered, self.hovered_row)
     }
 
     pub fn action_at(&self, x: f32, y: f32) -> Option<PrefAction> {
-        if !self.visible {
-            return None;
-        }
-
-        self.button_rects()
-            .into_iter()
-            .find(|rect| rect.contains(x, y))
-            .map(|rect| rect.action)
+        self.visible.then(|| self.button_rects()).and_then(|rects| {
+            rects
+                .into_iter()
+                .find(|rect| rect.contains(x, y))
+                .map(|rect| rect.action)
+        })
     }
 }
