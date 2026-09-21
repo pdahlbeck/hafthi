@@ -36,8 +36,9 @@ impl PtySession {
             })
             .context("failed to create PTY")?;
 
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/usr/bin/fish".to_string());
-        let mut cmd = CommandBuilder::new(shell);
+        // The desktop launcher may have no SHELL in its environment. Let
+        // portable-pty resolve the user's login shell from the account database.
+        let mut cmd = CommandBuilder::new_default_prog();
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Hafthi");
