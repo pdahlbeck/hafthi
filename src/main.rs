@@ -188,7 +188,6 @@ struct GpuState {
     queue: Queue,
     config: SurfaceConfiguration,
     size: PhysicalSize<u32>,
-    adapter_name: String,
     alpha_mode: CompositeAlphaMode,
     settings: Settings,
 
@@ -352,7 +351,6 @@ impl GpuState {
             queue,
             config,
             size,
-            adapter_name: info.name,
             alpha_mode,
             settings,
             font_system,
@@ -398,10 +396,6 @@ impl GpuState {
         ] {
             buffer.set_size(&mut self.font_system, size.width as f32, size.height as f32);
         }
-    }
-
-    fn menu_font_size(&self) -> f32 {
-        self.settings.font_size * 0.78
     }
 
     fn menu_line_height(&self) -> f32 {
