@@ -1213,6 +1213,9 @@ fn main() -> Result<()> {
                 elwt.exit();
             }
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
+                if !preferences.visible {
+                    return;
+                }
                 if let Some(path) = path {
                     settings.branding_image = path;
                     if !settings.branding_enabled {
