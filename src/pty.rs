@@ -40,7 +40,7 @@ impl PtySession {
         let mut cmd = CommandBuilder::new(shell);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "HafthiGPU");
+        cmd.env("TERM_PROGRAM", "Hafthi");
         cmd.env("HAFTHI", "1");
 
         let mut child = pair
