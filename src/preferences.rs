@@ -69,7 +69,7 @@ impl PreferencesPanel {
     }
 
     pub fn height(&self) -> f32 {
-        self.row_height * 5.0
+        self.row_height * 8.0
     }
 
     pub fn button_rects(&self) -> Vec<HitRect> {
@@ -79,6 +79,7 @@ impl PreferencesPanel {
         let minus_x = plus_x - gap - small_w;
         let button_h = self.row_height * 0.72;
         let y_inset = (self.row_height - button_h) / 2.0;
+        let wide_w = small_w * 2.0 + gap;
 
         let row_button = |row: usize, x: f32, action: PrefAction| HitRect {
             x,
@@ -98,15 +99,31 @@ impl PreferencesPanel {
             row_button(3, minus_x, PrefAction::ScrollbackDown),
             row_button(3, plus_x, PrefAction::ScrollbackUp),
             HitRect {
-                x: self.x + self.width * 0.50,
+                x: minus_x,
                 y: self.y + 4.0 * self.row_height + y_inset,
+                w: wide_w,
+                h: button_h,
+                action: PrefAction::ToggleBranding,
+            },
+            HitRect {
+                x: minus_x,
+                y: self.y + 5.0 * self.row_height + y_inset,
+                w: wide_w,
+                h: button_h,
+                action: PrefAction::ChooseImage,
+            },
+            row_button(6, minus_x, PrefAction::GifFpsDown),
+            row_button(6, plus_x, PrefAction::GifFpsUp),
+            HitRect {
+                x: self.x + self.width * 0.50,
+                y: self.y + 7.0 * self.row_height + y_inset,
                 w: self.width * 0.21,
                 h: button_h,
                 action: PrefAction::Cancel,
             },
             HitRect {
                 x: self.x + self.width * 0.74,
-                y: self.y + 4.0 * self.row_height + y_inset,
+                y: self.y + 7.0 * self.row_height + y_inset,
                 w: self.width * 0.21,
                 h: button_h,
                 action: PrefAction::Save,
