@@ -284,12 +284,26 @@ impl GpuState {
             info.name, info.backend, info.device_type
         );
 
+        // The downlevel default limits 2D textures to 2048 pixels, which is
+        // smaller than a normal high-DPI desktop window. Request the adapter's
+        // actual surface size limit while keeping the other conservative limits.
+        let adapter_limits = adapter.limits();
+        let max_surface_dimension = adapter_limits.max_texture_dimension_2d;
+        diagnostics::record(&format!(
+            "GPU: {} ({:?}), max surface dimension: {max_surface_dimension}",
+            info.name, info.backend
+        ));
+        let required_limits = Limits {
+            max_texture_dimension_2d: max_surface_dimension,
+            ..Limits::downlevel_defaults()
+        };
+
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
                     label: Some("Hafþi device"),
                     required_features: Features::empty(),
-                    required_limits: Limits::downlevel_defaults(),
+                    required_limits,
                 },
                 None,
             )
@@ -330,6 +344,12 @@ impl GpuState {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
+        anyhow::ensure!(
+            config.width <= max_surface_dimension && config.height <= max_surface_dimension,
+            "window size {}x{} exceeds GPU maximum surface dimension {max_surface_dimension}",
+            config.width,
+            config.height,
+        );
         surface.configure(&device, &config);
 
         let mut font_system = FontSystem::new();
@@ -394,6 +414,15 @@ impl GpuState {
 
     fn resize(&mut self, size: PhysicalSize<u32>) {
         if size.width == 0 || size.height == 0 {
+            return;
+        }
+
+        let max = self.device.limits().max_texture_dimension_2d;
+        if size.width > max || size.height > max {
+            diagnostics::record(&format!(
+                "window resize {}x{} exceeds GPU maximum surface dimension {max}",
+                size.width, size.height
+            ));
             return;
         }
 
