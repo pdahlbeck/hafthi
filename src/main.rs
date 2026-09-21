@@ -295,8 +295,8 @@ impl GpuState {
         );
         text_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let menu_font_size = settings.font_size * 0.58;
-        let menu_line_height = settings.line_height * 0.72;
+        let menu_font_size = settings.font_size * 0.78;
+        let menu_line_height = settings.line_height * 0.92;
         let mut menu_buffer = Buffer::new(
             &mut font_system,
             Metrics::new(menu_font_size, menu_line_height),
@@ -389,11 +389,11 @@ impl GpuState {
     }
 
     fn menu_font_size(&self) -> f32 {
-        self.settings.font_size * 0.58
+        self.settings.font_size * 0.78
     }
 
     fn menu_line_height(&self) -> f32 {
-        self.settings.line_height * 0.72
+        self.settings.line_height * 0.92
     }
 
     fn apply_settings(&mut self, settings: Settings) {
@@ -401,8 +401,8 @@ impl GpuState {
 
         let font_size = self.settings.font_size;
         let line_height = self.settings.line_height;
-        let menu_font_size = font_size * 0.58;
-        let menu_line_height = line_height * 0.72;
+        let menu_font_size = font_size * 0.78;
+        let menu_line_height = line_height * 0.92;
 
         self.text_buffer.set_metrics(
             &mut self.font_system,
