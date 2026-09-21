@@ -309,7 +309,7 @@ impl GpuState {
         );
         prefs_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let button_metrics = Metrics::new(settings.font_size * 0.60, settings.line_height * 0.96);
+        let button_metrics = Metrics::new(settings.font_size * 0.72, settings.line_height * 0.96);
 
         let mut prefs_minus_buffer = Buffer::new(&mut font_system, button_metrics);
         prefs_minus_buffer.set_text(&mut font_system, "−", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
@@ -320,11 +320,11 @@ impl GpuState {
         prefs_plus_buffer.shape_until_scroll(&mut font_system);
 
         let mut prefs_toggle_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_toggle_buffer.set_text(&mut font_system, "Toggle", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
+        prefs_toggle_buffer.set_text(&mut font_system, "On / Off", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
         prefs_toggle_buffer.shape_until_scroll(&mut font_system);
 
         let mut prefs_choose_buffer = Buffer::new(&mut font_system, button_metrics);
-        prefs_choose_buffer.set_text(&mut font_system, "Choose…", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
+        prefs_choose_buffer.set_text(&mut font_system, "Choose image…", Attrs::new().family(Family::Name(&settings.font_family)), Shaping::Advanced);
         prefs_choose_buffer.shape_until_scroll(&mut font_system);
 
         let mut prefs_cancel_buffer = Buffer::new(&mut font_system, button_metrics);
@@ -416,7 +416,7 @@ impl GpuState {
             &mut self.font_system,
             Metrics::new(font_size * 0.86, line_height * 1.08),
         );
-        let button_metrics = Metrics::new(font_size * 0.60, line_height * 0.96);
+        let button_metrics = Metrics::new(font_size * 0.72, line_height * 0.96);
         for buffer in [
             &mut self.prefs_minus_buffer,
             &mut self.prefs_plus_buffer,
@@ -430,16 +430,29 @@ impl GpuState {
     }
 
     fn preferences_text(&self) -> String {
+        let image_chars: Vec<char> = self.settings.branding_image.chars().collect();
+        let image = if image_chars.len() > 34 {
+            format!("…{}", image_chars[image_chars.len() - 33..].iter().collect::<String>())
+        } else {
+            self.settings.branding_image.clone()
+        };
+
         format!(
             "Font size                 {:.1} px\n\
 Transparency              {:>3}%\n\
 Padding                   {:.0} px\n\
 Scrollback                {:>6}\n\
+Background image          {:<8}\n\
+Image / GIF               {:<34}\n\
+GIF max FPS               {:>2}\n\
 \n",
             self.settings.font_size,
             (self.settings.opacity * 100.0).round() as u32,
             self.settings.padding / self.settings.scale_factor.max(1.0),
             self.settings.scrollback,
+            if self.settings.branding_enabled { "On" } else { "Off" },
+            image,
+            self.settings.branding_max_fps,
         )
     }
 
@@ -1194,18 +1207,19 @@ fn main() -> Result<()> {
                                     settings.branding_enabled = !settings.branding_enabled;
                                 }
                                 Some(PrefAction::ChooseImage) => {
-                                    let dialog_proxy = proxy.clone();
-                                    std::thread::spawn(move || {
-                                        let chosen = rfd::FileDialog::new()
-                                            .add_filter(
-                                                "Images and GIF",
-                                                &["png", "gif", "jpg", "jpeg", "webp"],
-                                            )
-                                            .pick_file()
-                                            .map(|path| path.to_string_lossy().into_owned());
-
-                                        let _ = dialog_proxy.send_event(AppEvent::ImageChosen(chosen));
-                                    });
+                                    // rfd's native Linux dialog must run on the UI thread on
+                                    // backends such as GTK. Running it on a worker thread made
+                                    // the dialog appear while its Select action could fail.
+                                    if let Some(path) = rfd::FileDialog::new()
+                                        .add_filter(
+                                            "Images and GIF",
+                                            &["png", "gif", "jpg", "jpeg", "webp"],
+                                        )
+                                        .pick_file()
+                                    {
+                                        settings.branding_image =
+                                            path.to_string_lossy().into_owned();
+                                    }
                                 }
                                 Some(PrefAction::GifFpsDown) => {
                                     settings.branding_max_fps = settings.branding_max_fps.saturating_sub(1).max(1);
