@@ -47,15 +47,15 @@ impl PreferencesPanel {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 700.0,
-            row_height: 56.0,
+            width: 820.0,
+            row_height: 68.0,
             hovered: None,
         }
     }
 
     pub fn open(&mut self, surface_width: u32, surface_height: u32, scale: f32) {
-        self.width = 700.0 * scale;
-        self.row_height = 56.0 * scale;
+        self.width = 820.0 * scale;
+        self.row_height = 68.0 * scale;
         let height = self.height();
         self.x = ((surface_width as f32 - self.width) / 2.0).max(8.0);
         self.y = ((surface_height as f32 - height) / 2.0).max(8.0);
@@ -69,11 +69,11 @@ impl PreferencesPanel {
     }
 
     pub fn height(&self) -> f32 {
-        self.row_height * 8.0
+        self.row_height * 5.0
     }
 
     pub fn button_rects(&self) -> Vec<HitRect> {
-        let small_w = self.width * 0.11;
+        let small_w = self.width * 0.12;
         let gap = self.width * 0.025;
         let plus_x = self.x + self.width - gap - small_w;
         let minus_x = plus_x - gap - small_w;
@@ -88,8 +88,6 @@ impl PreferencesPanel {
             action,
         };
 
-        let wide_w = small_w * 2.0 + gap;
-
         vec![
             row_button(0, minus_x, PrefAction::FontDown),
             row_button(0, plus_x, PrefAction::FontUp),
@@ -100,32 +98,16 @@ impl PreferencesPanel {
             row_button(3, minus_x, PrefAction::ScrollbackDown),
             row_button(3, plus_x, PrefAction::ScrollbackUp),
             HitRect {
-                x: minus_x,
+                x: self.x + self.width * 0.50,
                 y: self.y + 4.0 * self.row_height + y_inset,
-                w: wide_w,
-                h: button_h,
-                action: PrefAction::ToggleBranding,
-            },
-            HitRect {
-                x: minus_x,
-                y: self.y + 5.0 * self.row_height + y_inset,
-                w: wide_w,
-                h: button_h,
-                action: PrefAction::ChooseImage,
-            },
-            row_button(6, minus_x, PrefAction::GifFpsDown),
-            row_button(6, plus_x, PrefAction::GifFpsUp),
-            HitRect {
-                x: self.x + self.width * 0.52,
-                y: self.y + 7.0 * self.row_height + y_inset,
-                w: self.width * 0.20,
+                w: self.width * 0.21,
                 h: button_h,
                 action: PrefAction::Cancel,
             },
             HitRect {
-                x: self.x + self.width * 0.75,
-                y: self.y + 7.0 * self.row_height + y_inset,
-                w: self.width * 0.20,
+                x: self.x + self.width * 0.74,
+                y: self.y + 4.0 * self.row_height + y_inset,
+                w: self.width * 0.21,
                 h: button_h,
                 action: PrefAction::Save,
             },
