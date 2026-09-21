@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.6:** fixes shell startup from the application launcher. Linux/Wayland is the only supported platform.
+> **Version 0.7.7:** writes startup and exit details to `~/.local/state/hafthi/diagnostics.log` to investigate unexpected exits. Linux/Wayland is the only supported platform.
 
 ## Current stack
 
