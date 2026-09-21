@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.9:** redesigned preferences with a dark sidebar, blue accents, and separate Appearance, Terminal, and Background pages. Linux/Wayland is the only supported platform.
+> **Version 0.7.10:** makes the redesigned preferences panel scale up with large windows while keeping it inside smaller ones. Linux/Wayland is the only supported platform.
 
 ## Current stack
 
