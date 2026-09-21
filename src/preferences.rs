@@ -85,9 +85,13 @@ impl PreferencesPanel {
         }
     }
 
-    pub fn open(&mut self, surface_width: u32, surface_height: u32, scale: f32) {
-        self.scale = scale
-            .max(0.1)
+    pub fn open(&mut self, surface_width: u32, surface_height: u32, _scale: f32) {
+        // The window dimensions are already physical pixels. Grow the panel
+        // with the available space instead of anchoring it to the monitor's
+        // scale factor, which can be 1 on a very large Wayland window.
+        self.scale = ((surface_width as f32 * 0.80) / Self::WIDTH)
+            .min((surface_height as f32 * 0.78) / Self::HEIGHT)
+            .min(2.0)
             .min((surface_width as f32 - 16.0).max(1.0) / Self::WIDTH)
             .min((surface_height as f32 - 16.0).max(1.0) / Self::HEIGHT);
         self.width = Self::WIDTH * self.scale;
@@ -252,5 +256,20 @@ mod tests {
             panel.action_at(choose.x + 5.0, choose.y + 5.0),
             Some(PrefAction::ChooseImage)
         );
+    }
+
+    #[test]
+    fn panel_grows_on_large_windows_and_fits_small_ones() {
+        let mut panel = PreferencesPanel::new();
+        panel.open(1816, 2316, 1.0);
+        assert!(panel.width > 1400.0);
+        assert!(panel.x >= 0.0 && panel.y >= 0.0);
+        assert!(panel.x + panel.width <= 1816.0);
+        assert!(panel.y + panel.height() <= 2316.0);
+
+        panel.open(620, 440, 2.0);
+        assert!(panel.x >= 0.0 && panel.y >= 0.0);
+        assert!(panel.x + panel.width <= 620.0);
+        assert!(panel.y + panel.height() <= 440.0);
     }
 }
