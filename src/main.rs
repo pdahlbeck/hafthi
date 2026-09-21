@@ -22,7 +22,7 @@ use glyphon::{
 };
 use background::BackgroundRenderer;
 use menu::{ContextMenu, MenuAction};
-use preferences::{PrefAction, PreferencesPanel};
+use preferences::{PrefAction, PrefPage, PreferencesPanel};
 use pty::{AppEvent, PtySession};
 use settings::{config_path, Settings};
 use terminal::TerminalGrid;
@@ -445,9 +445,14 @@ impl GpuState {
     }
 
     fn apply_settings(&mut self, settings: Settings) {
+        let reload_background = settings.branding_enabled
+            && (!self.settings.branding_enabled
+                || settings.branding_image != self.settings.branding_image);
+        let font_changed = settings.font_size != self.settings.font_size
+            || settings.line_height != self.settings.line_height;
         self.settings = settings;
 
-        if self.settings.branding_enabled {
+        if reload_background {
             if let Err(err) = self.background_renderer.load(
                 &self.device,
                 &self.queue,
@@ -455,6 +460,10 @@ impl GpuState {
             ) {
                 eprintln!("Hafþi background: {err:#}");
             }
+        }
+
+        if !font_changed {
+            return;
         }
 
         let font_size = self.settings.font_size;
@@ -579,8 +588,9 @@ impl GpuState {
         };
 
         if prefs.visible {
-            let primary = Color::rgb(240, 241, 243);
-            let muted = Color::rgb(157, 161, 169);
+            let primary = Color::rgb(235, 239, 242);
+            let muted = Color::rgb(164, 176, 185);
+            let accent = Color::rgb(117, 188, 231);
             let mut labels: Vec<(Buffer, f32, f32, TextBounds)> = Vec::new();
             let mut add = |text: &str, x: f32, y: f32, width: f32, size: f32, color: Color| {
                 let (px, py) = prefs.pos(x, y);
@@ -602,48 +612,62 @@ impl GpuState {
                 }));
             };
 
-            add("Settings", 24.0, 19.0, 400.0, 21.0, primary);
-            add("Appearance and background", 24.0, 52.0, 400.0, 12.0, muted);
-            for (title, y) in [("APPEARANCE", 86.0), ("TERMINAL", 253.0), ("BACKGROUND", 332.0)] {
-                add(title, 24.0, y, 250.0, 11.0, muted);
+            add("Hafþi", 19.0, 18.0, 155.0, 19.0, primary);
+            add("PREFERENCES", 19.0, 49.0, 150.0, 10.0, muted);
+            for page in PrefPage::ALL {
+                let y = 89.0 + PrefPage::ALL.iter().position(|item| *item == page).unwrap() as f32 * 43.0;
+                add(page.title(), 42.0, y, 139.0, 14.0,
+                    if prefs.page == page { primary } else { muted });
             }
-            for (name, y) in [
-                ("Font size", 119.0), ("Transparency", 163.0),
-                ("Padding", 207.0), ("Scrollback", 286.0),
-                ("Image display", 365.0), ("Image / GIF", 422.0),
-                ("GIF max FPS", 493.0),
-            ] {
-                add(name, 24.0, y, 180.0, 15.0, primary);
+            add(prefs.page.title(), 213.0, 21.0, 350.0, 19.0, primary);
+            match prefs.page {
+                PrefPage::Appearance => {
+                    add("LOOK & FEEL", 226.0, 91.0, 180.0, 11.0, accent);
+                    add("Font size", 226.0, 133.0, 170.0, 15.0, primary);
+                    add(&format!("{:.1} px", self.settings.font_size), 544.0, 134.0, 78.0, 13.0, muted);
+                    add("Window opacity", 226.0, 190.0, 210.0, 15.0, primary);
+                    add(&format!("{}%", (self.settings.opacity * 100.0).round() as u32),
+                        629.0, 190.0, 67.0, 14.0, accent);
+                    add("Padding", 226.0, 296.0, 170.0, 15.0, primary);
+                    add(&format!("{:.0} px", self.settings.logical_padding()),
+                        544.0, 297.0, 78.0, 13.0, muted);
+                    add("Drag or click the blue bar to adjust window opacity.",
+                        226.0, 356.0, 460.0, 12.0, muted);
+                }
+                PrefPage::Terminal => {
+                    add("HISTORY", 226.0, 91.0, 180.0, 11.0, accent);
+                    add("Scrollback lines", 226.0, 133.0, 200.0, 15.0, primary);
+                    add(&self.settings.scrollback.to_string(), 528.0, 134.0, 94.0, 13.0, muted);
+                    add("How many lines the terminal keeps above the screen.",
+                        226.0, 185.0, 460.0, 12.0, muted);
+                    add("Changes are shown immediately. Save to keep them.",
+                        226.0, 352.0, 460.0, 12.0, muted);
+                }
+                PrefPage::Background => {
+                    add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
+                    add("Image / GIF", 226.0, 189.0, 260.0, 15.0, primary);
+                    let image = &self.settings.branding_image;
+                    let filename = std::path::Path::new(image).file_name()
+                        .and_then(|name| name.to_str()).unwrap_or(image);
+                    let filename = if image == "default" || image.is_empty() {
+                        "No image selected".to_string()
+                    } else { truncate_label(filename, 35) };
+                    add(&filename, 226.0, 223.0, 450.0, 14.0, primary);
+                    if image != "default" && !image.is_empty() {
+                        add(&truncate_label(image, 58), 226.0, 244.0, 468.0, 10.0, muted);
+                    }
+                    add("GIF max FPS", 226.0, 354.0, 200.0, 15.0, primary);
+                    add(&self.settings.branding_max_fps.to_string(),
+                        566.0, 355.0, 56.0, 13.0, muted);
+                }
             }
-            for (value, y) in [
-                (format!("{:.1} px", self.settings.font_size), 119.0),
-                (format!("{}%", (self.settings.opacity * 100.0).round() as u32), 163.0),
-                (format!("{:.0} px", self.settings.logical_padding()), 207.0),
-                (self.settings.scrollback.to_string(), 286.0),
-                (self.settings.branding_max_fps.to_string(), 493.0),
-            ] {
-                add(&value, 420.0, y, 125.0, 14.0, muted);
-            }
-            let image = &self.settings.branding_image;
-            let filename = std::path::Path::new(image).file_name()
-                .and_then(|name| name.to_str()).unwrap_or(image);
-            let filename = truncate_label(filename, 30);
-            let path = if image == "default" || image.is_empty() {
-                "No image selected".to_string()
-            } else {
-                truncate_label(image, 44)
-            };
-            add(&filename, 205.0, 410.0, 275.0, 14.0, primary);
-            add(&path, 205.0, 442.0, 275.0, 11.0, muted);
             for button in prefs.button_rects() {
                 let caption = match button.action {
                     PrefAction::FontDown
-                    | PrefAction::OpacityDown
                     | PrefAction::PaddingDown
                     | PrefAction::ScrollbackDown
                     | PrefAction::GifFpsDown => "−",
                     PrefAction::FontUp
-                    | PrefAction::OpacityUp
                     | PrefAction::PaddingUp
                     | PrefAction::ScrollbackUp
                     | PrefAction::GifFpsUp => "+",
@@ -654,18 +678,22 @@ impl GpuState {
                     PrefAction::ClearImage => "Clear",
                     PrefAction::Cancel => "Cancel",
                     PrefAction::Save => "Save",
+                    PrefAction::SelectPage(_) | PrefAction::OpacitySet(_) => continue,
                 };
                 let font_size = if caption == "+" || caption == "−" { 18.0 } else { 13.0 };
-                let text_width = caption.chars().count() as f32 * font_size * 0.54 * prefs.scale;
-                let x = (button.x + (button.w - text_width) / 2.0 - prefs.x) / prefs.scale;
+                let text_width = caption.chars().count() as f32 * font_size * 0.53;
+                let x = (button.x - prefs.x) / prefs.scale
+                    + (button.w / prefs.scale - text_width) / 2.0;
                 let y = (button.y - prefs.y) / prefs.scale + if font_size > 13.0 { 3.0 } else { 8.0 };
                 let color = if button.action == PrefAction::Save {
-                    Color::rgb(24, 26, 29)
+                    Color::rgb(245, 250, 253)
                 } else { primary };
                 add(caption, x, y, button.w / prefs.scale, font_size, color);
             }
             drop(add);
-            let mut areas = vec![terminal_area];
+            // Text is drawn after all rectangles. Leave terminal glyphs out of
+            // this pass so they cannot show through the preferences window.
+            let mut areas = Vec::new();
             areas.extend(labels.iter().map(|(buffer, x, y, bounds)| TextArea {
                 buffer, left: *x, top: *y, scale: 1.0,
                 bounds: *bounds, default_color: primary,
@@ -828,34 +856,90 @@ impl GpuState {
 
         if prefs.visible {
             let scale = prefs.scale;
+            // Dim the terminal and draw a solid window with the sidebar and
+            // subtle blue accents from the reference design.
+            RectRenderer::push_rect(
+                &mut rect_vertices, self.config.width, self.config.height,
+                0.0, 0.0, self.config.width as f32, self.config.height as f32,
+                [0.02, 0.03, 0.04, 0.44],
+            );
             RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
-                prefs.x - scale, prefs.y - scale,
-                prefs.width + 2.0 * scale, prefs.height() + 2.0 * scale,
-                (ui::PANEL_RADIUS + 1.0) * scale, ui::PANEL_BORDER,
+                prefs.x - 2.0 * scale, prefs.y - 2.0 * scale,
+                prefs.width + 4.0 * scale, prefs.height() + 4.0 * scale,
+                10.0 * scale, [0.35, 0.39, 0.42, 0.90],
             );
             RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
                 prefs.x, prefs.y, prefs.width, prefs.height(),
-                ui::PANEL_RADIUS * scale, ui::PANEL_SURFACE,
+                8.0 * scale, [0.16, 0.18, 0.19, 1.0],
             );
-            if let Some(row) = prefs.hovered_row {
-                let (x, y, w, h) = prefs.row_rect(row);
+            let mut shape = |x: f32, y: f32, w: f32, h: f32, radius: f32, color| {
+                let (x, y) = prefs.pos(x, y);
                 RectRenderer::push_rounded_rect(
                     &mut rect_vertices, self.config.width, self.config.height,
-                    x, y, w, h, ui::CONTROL_RADIUS * scale, ui::HOVER,
+                    x, y, w * scale, h * scale, radius * scale, color,
                 );
+            };
+            shape(0.0, 0.0, PreferencesPanel::SIDEBAR_WIDTH, 476.0, 8.0,
+                [0.115, 0.13, 0.14, 1.0]);
+            shape(8.0, 0.0, 184.0, 476.0, 0.0, [0.115, 0.13, 0.14, 1.0]);
+            shape(191.0, 0.0, 1.0, 476.0, 0.0, [0.33, 0.36, 0.38, 1.0]);
+            shape(0.0, 67.0, 736.0, 1.0, 0.0, [0.32, 0.35, 0.37, 1.0]);
+            shape(207.0, 416.0, 514.0, 1.0, 0.0, [0.29, 0.32, 0.34, 1.0]);
+            for page in PrefPage::ALL {
+                let index = PrefPage::ALL.iter().position(|item| *item == page).unwrap() as f32;
+                let row_y = 83.0 + index * 43.0;
+                if prefs.page == page || prefs.hovered_page == Some(page) {
+                    let color = if prefs.page == page {
+                        [0.15, 0.27, 0.34, 1.0]
+                    } else {
+                        [0.20, 0.23, 0.25, 1.0]
+                    };
+                    shape(9.0, row_y, 174.0, 37.0, 4.0, color);
+                    if prefs.page == page {
+                        shape(9.0, row_y, 3.0, 37.0, 0.0, [0.37, 0.69, 0.87, 1.0]);
+                    }
+                }
+                let y = 95.0 + index * 43.0;
+                let icon_color = if prefs.page == page {
+                    [0.45, 0.75, 0.93, 1.0]
+                } else { [0.52, 0.60, 0.65, 1.0] };
+                shape(23.0, y, 11.0, 11.0, 3.0, icon_color);
+                if page == PrefPage::Terminal {
+                    shape(25.0, y + 3.0, 6.0, 2.0, 0.0, [0.12, 0.16, 0.19, 1.0]);
+                }
             }
-            for y in [77.0, 244.0, 323.0, 534.0] {
-                let (x, y) = prefs.pos(24.0, y);
-                RectRenderer::push_rect(
-                    &mut rect_vertices, self.config.width, self.config.height,
-                    x, y, prefs.width - 48.0 * scale, scale.max(1.0), ui::DIVIDER,
-                );
+            let card = [0.135, 0.155, 0.17, 1.0];
+            let card_border = [0.32, 0.36, 0.39, 1.0];
+            match prefs.page {
+                PrefPage::Appearance => {
+                    shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
+                    shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
+                    shape(226.0, 175.0, 476.0, 1.0, 0.0, [0.28, 0.32, 0.34, 1.0]);
+                    shape(226.0, 273.0, 476.0, 1.0, 0.0, [0.28, 0.32, 0.34, 1.0]);
+                    let progress = self.settings.opacity.clamp(0.0, 1.0) as f32;
+                    shape(226.0, 235.0, 452.0, 5.0, 2.5, [0.28, 0.32, 0.35, 1.0]);
+                    shape(226.0, 235.0, (452.0 * progress).max(2.0), 5.0, 2.5,
+                        [0.32, 0.65, 0.86, 1.0]);
+                    shape(226.0 + 452.0 * progress - 7.0, 230.0, 15.0, 15.0, 7.5,
+                        [0.55, 0.77, 0.90, 1.0]);
+                }
+                PrefPage::Terminal => {
+                    shape(208.0, 78.0, 512.0, 229.0, 5.0, card_border);
+                    shape(209.0, 79.0, 510.0, 227.0, 4.0, card);
+                    shape(208.0, 322.0, 512.0, 75.0, 5.0, card);
+                }
+                PrefPage::Background => {
+                    for (y, h) in [(78.0, 100.0), (182.0, 131.0), (326.0, 70.0)] {
+                        shape(208.0, y, 512.0, h, 5.0, card_border);
+                        shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                    }
+                }
             }
             let selected = if !self.settings.branding_enabled {
                 PrefAction::ImageOff
@@ -865,24 +949,22 @@ impl GpuState {
                 PrefAction::ImageFull
             };
             for button in prefs.button_rects() {
-                let color = if button.action == PrefAction::Save {
-                    if prefs.hovered == Some(button.action) {
-                        [1.0, 1.0, 1.0, 1.0]
-                    } else {
-                        [0.91, 0.92, 0.93, 1.0]
-                    }
-                } else if prefs.hovered == Some(button.action) {
-                    ui::HOVER
-                } else if button.action == selected {
-                    ui::ACTIVE
-                } else {
-                    ui::CONTROL
-                };
-                RectRenderer::push_rounded_rect(
-                    &mut rect_vertices, self.config.width, self.config.height,
-                    button.x, button.y, button.w, button.h,
-                    ui::CONTROL_RADIUS * scale, color,
+                let active = button.action == selected || button.action == PrefAction::Save;
+                let hover = prefs.hovered == Some(button.action);
+                let color = if active {
+                    if hover { [0.28, 0.59, 0.79, 1.0] }
+                    else { [0.20, 0.47, 0.66, 1.0] }
+                } else if hover { [0.29, 0.33, 0.36, 1.0] }
+                else { [0.21, 0.24, 0.27, 1.0] };
+                let bx = (button.x - prefs.x) / scale;
+                let by = (button.y - prefs.y) / scale;
+                let bw = button.w / scale;
+                let bh = button.h / scale;
+                shape(bx - 1.0, by - 1.0, bw + 2.0, bh + 2.0, 5.0,
+                    if active { [0.40, 0.68, 0.86, 1.0] }
+                    else { [0.35, 0.39, 0.42, 1.0] },
                 );
+                shape(bx, by, bw, bh, 4.0, color);
             }
         }
 
@@ -1235,6 +1317,7 @@ fn run() -> Result<()> {
 
     let mut selection: Option<((usize, usize), (usize, usize))> = None;
     let mut selecting = false;
+    let mut opacity_dragging = false;
     let mut mouse_pos = winit::dpi::PhysicalPosition::new(0.0, 0.0);
     let mut clipboard = Clipboard::new().ok();
     let mut context_menu = ContextMenu::new();
@@ -1393,6 +1476,12 @@ fn run() -> Result<()> {
                     mouse_pos = position;
 
                     if preferences.visible {
+                        if opacity_dragging {
+                            settings.opacity = preferences.opacity_for_x(position.x as f32) as f64 / 100.0;
+                            gpu.apply_settings(settings.clone());
+                            dirty = true;
+                            window.request_redraw();
+                        }
                         if preferences.update_hover(position.x as f32, position.y as f32) {
                             dirty = true;
                             window.request_redraw();
@@ -1441,6 +1530,10 @@ fn run() -> Result<()> {
                                 .action_at(mouse_pos.x as f32, mouse_pos.y as f32);
 
                             match action {
+                                Some(PrefAction::SelectPage(page)) => {
+                                    preferences.page = page;
+                                    preferences.hovered = None;
+                                }
                                 Some(PrefAction::FontDown) => {
                                     settings.zoom_by(1.0 / 1.05);
                                     gpu.apply_settings(settings.clone());
@@ -1449,12 +1542,9 @@ fn run() -> Result<()> {
                                     settings.zoom_by(1.05);
                                     gpu.apply_settings(settings.clone());
                                 }
-                                Some(PrefAction::OpacityDown) => {
-                                    settings.opacity = (settings.opacity - 0.05).max(0.0);
-                                    gpu.apply_settings(settings.clone());
-                                }
-                                Some(PrefAction::OpacityUp) => {
-                                    settings.opacity = (settings.opacity + 0.05).min(1.0);
+                                Some(PrefAction::OpacitySet(value)) => {
+                                    opacity_dragging = true;
+                                    settings.opacity = value as f64 / 100.0;
                                     gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::PaddingDown) => {
@@ -1566,6 +1656,8 @@ fn run() -> Result<()> {
                             gpu.update_terminal_text(&terminal);
                             dirty = true;
                             window.request_redraw();
+                        } else {
+                            opacity_dragging = false;
                         }
                     } else if context_menu.visible {
                         if state == ElementState::Pressed {
