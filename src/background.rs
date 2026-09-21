@@ -343,24 +343,30 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
         &'a self,
         pass: &mut RenderPass<'a>,
         queue: &Queue,
-        window_width: u32,
-        window_height: u32,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
         opacity: f32,
     ) {
         let Some(bind_group) = self.bind_group.as_ref() else {
             return;
         };
+        let width = width.max(1.0);
+        let height = height.max(1.0);
         let uniform = BackgroundUniform {
             data: [
-                window_width.max(1) as f32 / window_height.max(1) as f32,
+                width / height,
                 self.image_width.max(1) as f32 / self.image_height.max(1) as f32,
                 opacity.clamp(0.0, 1.0),
                 0.0,
             ],
         };
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
+        pass.set_viewport(x, y, width, height, 0.0, 1.0);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
+
 }
