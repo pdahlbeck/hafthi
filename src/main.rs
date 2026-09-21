@@ -694,13 +694,37 @@ GIF max FPS               {:>2}\n\
 
         if terminal.cursor_visible() {
             let (cx, cy) = terminal.cursor();
+
+            // Use glyphon's actual shaped glyph geometry for the cursor instead
+            // of estimating X from font_size * a constant. This keeps the block
+            // exactly on the terminal cell after the final rendered character,
+            // regardless of DPI, font metrics or glyphon shaping.
+            let shaped_cursor = self
+                .text_buffer
+                .layout_runs()
+                .find(|run| run.line_i == cy)
+                .and_then(|run| {
+                    if let Some(glyph) = run.glyphs.get(cx) {
+                        Some((glyph.x, glyph.w))
+                    } else {
+                        run.glyphs
+                            .last()
+                            .map(|glyph| (glyph.x + glyph.w, glyph.w))
+                    }
+                });
+
+            let (cursor_x, cursor_w) = shaped_cursor.unwrap_or((
+                cx as f32 * self.settings.cell_width,
+                self.settings.cell_width,
+            ));
+
             RectRenderer::push_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
-                self.settings.padding + cx as f32 * self.settings.cell_width,
+                self.settings.padding + cursor_x,
                 self.settings.padding + cy as f32 * self.settings.line_height,
-                self.settings.cell_width,
+                cursor_w.max(1.0),
                 self.settings.line_height,
                 Settings::rgba_f32(self.settings.cursor, 0.55),
             );
