@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hafþi
+Comment=GPU-accelerated Wayland terminal emulator
+Exec=hafthi
+Icon=hafthi
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupWMClass=se.dahlbeck.Hafthi
+Keywords=terminal;shell;wayland;
