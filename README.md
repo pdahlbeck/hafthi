@@ -1,8 +1,8 @@
-# Hafthi
+# Hafþi
 
-**Hafthi is a GPU-accelerated terminal emulator for Linux/Wayland, written in Rust and rendered with wgpu.**
+**Hafþi is a GPU-accelerated terminal emulator for Linux/Wayland, written in Rust and rendered with wgpu.**
 
-Hafthi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
+Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
 > **Status:** active development. Linux/Wayland is the only supported platform for now.
 
@@ -58,11 +58,11 @@ cd hafthi
 cargo run --release
 ```
 
-Hafthi currently targets Linux/Wayland.
+Hafþi currently targets Linux/Wayland.
 
 ## Configuration
 
-Hafthi uses:
+Hafþi uses:
 
 ```text
 ~/.config/hafthi/config.ini
@@ -72,7 +72,7 @@ The GPU renderer currently reads settings including font, opacity, padding, colo
 
 ## Transparency on Hyprland
 
-Hafthi supports true alpha transparency and uses the staging Wayland `ext-background-effect-v1` protocol with an empty blur region. On supported Hyprland versions this keeps a transparent terminal background sharp instead of applying compositor blur.
+Hafþi supports true alpha transparency and uses the staging Wayland `ext-background-effect-v1` protocol with an empty blur region. On supported Hyprland versions this keeps a transparent terminal background sharp instead of applying compositor blur.
 
 At `opacity=0`, the intended result is a fully transparent terminal background with the wallpaper remaining crisp behind the text.
 
