@@ -32,7 +32,7 @@ impl Default for Settings {
             font_family: "JetBrains Mono Nerd Font".into(),
             font_size,
             line_height: font_size * 1.45,
-            cell_width: font_size * 0.72,
+            cell_width: font_size * 0.60,
             padding: 25.0,
             scale_factor: 1.0,
             gpu_font_scale: 1.8,
@@ -154,7 +154,7 @@ impl Settings {
         // semantics (points/logical units), while glyphon expects physical px.
         // Physical scaling is applied later after winit reports the display DPI.
         out.line_height = out.font_size * 1.45;
-        out.cell_width = out.font_size * 0.72;
+        out.cell_width = out.font_size * 0.60;
 
         if let Some(v) = get("general", "padding").and_then(|v| v.parse::<f32>().ok()) {
             out.padding = v.max(0.0);
@@ -216,7 +216,7 @@ impl Settings {
         let font_px = self.font_size * (96.0 / 72.0) * scale * self.gpu_font_scale;
         self.font_size = font_px;
         self.line_height = font_px * 1.45;
-        self.cell_width = font_px * 0.72;
+        self.cell_width = font_px * 0.60;
         self.padding *= scale;
     }
 
@@ -224,7 +224,7 @@ impl Settings {
         let factor = factor.clamp(0.5, 2.0);
         self.font_size = (self.font_size * factor).clamp(8.0, 160.0);
         self.line_height = self.font_size * 1.45;
-        self.cell_width = self.font_size * 0.72;
+        self.cell_width = self.font_size * 0.60;
     }
 
     pub fn logical_font_size(&self) -> f32 {
