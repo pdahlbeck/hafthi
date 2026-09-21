@@ -1,4 +1,3 @@
-#[cfg(target_os = "linux")]
 mod imp {
     use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
     use wayland_client::backend::{Backend, ObjectId};
@@ -142,17 +141,4 @@ mod imp {
     }
 }
 
-#[cfg(target_os = "linux")]
 pub use imp::NoBlur;
-
-#[cfg(not(target_os = "linux"))]
-pub struct NoBlur;
-
-#[cfg(not(target_os = "linux"))]
-impl NoBlur {
-    pub fn attach(_: &winit::window::Window) -> Option<Self> {
-        None
-    }
-
-    pub fn dispatch_pending(&mut self) {}
-}
