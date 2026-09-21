@@ -1,9 +1,28 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefPage {
+    Appearance,
+    Terminal,
+    Background,
+}
+
+impl PrefPage {
+    pub const ALL: [Self; 3] = [Self::Appearance, Self::Terminal, Self::Background];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Appearance => "Appearance",
+            Self::Terminal => "Terminal",
+            Self::Background => "Background",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefAction {
+    SelectPage(PrefPage),
     FontDown,
     FontUp,
-    OpacityDown,
-    OpacityUp,
+    OpacitySet(u8),
     PaddingDown,
     PaddingUp,
     ScrollbackDown,
@@ -41,22 +60,17 @@ pub struct PreferencesPanel {
     pub y: f32,
     pub width: f32,
     pub scale: f32,
+    pub page: PrefPage,
     pub hovered: Option<PrefAction>,
-    pub hovered_row: Option<usize>,
+    pub hovered_page: Option<PrefPage>,
 }
 
 impl PreferencesPanel {
-    pub const WIDTH: f32 = 680.0;
-    pub const HEIGHT: f32 = 596.0;
-    pub const ROWS: [(f32, f32); 7] = [
-        (110.0, 44.0),
-        (154.0, 44.0),
-        (198.0, 44.0),
-        (277.0, 44.0),
-        (356.0, 44.0),
-        (404.0, 76.0),
-        (484.0, 44.0),
-    ];
+    pub const WIDTH: f32 = 736.0;
+    pub const HEIGHT: f32 = 476.0;
+    pub const SIDEBAR_WIDTH: f32 = 192.0;
+    pub const CONTENT_X: f32 = 208.0;
+    pub const CONTENT_WIDTH: f32 = 512.0;
 
     pub fn new() -> Self {
         Self {
@@ -65,13 +79,13 @@ impl PreferencesPanel {
             y: 0.0,
             width: Self::WIDTH,
             scale: 1.0,
+            page: PrefPage::Appearance,
             hovered: None,
-            hovered_row: None,
+            hovered_page: None,
         }
     }
 
     pub fn open(&mut self, surface_width: u32, surface_height: u32, scale: f32) {
-        // Fit all controls into the current terminal, even after a resize.
         self.scale = scale
             .max(0.1)
             .min((surface_width as f32 - 16.0).max(1.0) / Self::WIDTH)
@@ -81,13 +95,13 @@ impl PreferencesPanel {
         self.y = (surface_height as f32 - self.height()) / 2.0;
         self.visible = true;
         self.hovered = None;
-        self.hovered_row = None;
+        self.hovered_page = None;
     }
 
     pub fn close(&mut self) {
         self.visible = false;
         self.hovered = None;
-        self.hovered_row = None;
+        self.hovered_page = None;
     }
 
     pub fn height(&self) -> f32 {
@@ -98,15 +112,29 @@ impl PreferencesPanel {
         (self.x + x * self.scale, self.y + y * self.scale)
     }
 
-    pub fn row_rect(&self, index: usize) -> (f32, f32, f32, f32) {
-        let (top, height) = Self::ROWS[index];
-        let (x, y) = self.pos(8.0, top);
-        (x, y, self.width - 16.0 * self.scale, height * self.scale)
+    pub fn page_rect(&self, page: PrefPage) -> HitRect {
+        let index = PrefPage::ALL
+            .iter()
+            .position(|candidate| *candidate == page)
+            .unwrap();
+        let (x, y) = self.pos(9.0, 83.0 + index as f32 * 43.0);
+        HitRect {
+            x,
+            y,
+            w: 174.0 * self.scale,
+            h: 37.0 * self.scale,
+            action: PrefAction::SelectPage(page),
+        }
+    }
+
+    pub fn slider_rect(&self) -> (f32, f32, f32, f32) {
+        let (x, y) = self.pos(226.0, 223.0);
+        (x, y, 452.0 * self.scale, 28.0 * self.scale)
     }
 
     pub fn button_rects(&self) -> Vec<HitRect> {
         use PrefAction::*;
-        let mut buttons = Vec::with_capacity(17);
+        let mut buttons = Vec::new();
         let mut add = |x: f32, y: f32, w: f32, h: f32, action| {
             let (x, y) = self.pos(x, y);
             buttons.push(HitRect {
@@ -117,47 +145,112 @@ impl PreferencesPanel {
                 action,
             });
         };
-        for (row, down, up) in [
-            (0, FontDown, FontUp),
-            (1, OpacityDown, OpacityUp),
-            (2, PaddingDown, PaddingUp),
-            (3, ScrollbackDown, ScrollbackUp),
-            (6, GifFpsDown, GifFpsUp),
-        ] {
-            let y = Self::ROWS[row].0 + 5.0;
-            add(568.0, y, 34.0, 34.0, down);
-            add(610.0, y, 34.0, 34.0, up);
+        match self.page {
+            PrefPage::Appearance => {
+                add(626.0, 126.0, 35.0, 34.0, FontDown);
+                add(669.0, 126.0, 35.0, 34.0, FontUp);
+                add(626.0, 289.0, 35.0, 34.0, PaddingDown);
+                add(669.0, 289.0, 35.0, 34.0, PaddingUp);
+            }
+            PrefPage::Terminal => {
+                add(626.0, 126.0, 35.0, 34.0, ScrollbackDown);
+                add(669.0, 126.0, 35.0, 34.0, ScrollbackUp);
+            }
+            PrefPage::Background => {
+                add(226.0, 126.0, 106.0, 35.0, ImageOff);
+                add(337.0, 126.0, 126.0, 35.0, ImageBanner);
+                add(468.0, 126.0, 106.0, 35.0, ImageFull);
+                add(494.0, 260.0, 117.0, 34.0, ChooseImage);
+                add(618.0, 260.0, 86.0, 34.0, ClearImage);
+                add(626.0, 348.0, 35.0, 34.0, GifFpsDown);
+                add(669.0, 348.0, 35.0, 34.0, GifFpsUp);
+            }
         }
-        add(416.0, 361.0, 68.0, 34.0, ImageOff);
-        add(484.0, 361.0, 88.0, 34.0, ImageBanner);
-        add(572.0, 361.0, 72.0, 34.0, ImageFull);
-        add(490.0, 422.0, 92.0, 34.0, ChooseImage);
-        add(590.0, 422.0, 54.0, 34.0, ClearImage);
-        add(468.0, 546.0, 82.0, 36.0, Cancel);
-        add(558.0, 546.0, 86.0, 36.0, Save);
+        add(526.0, 430.0, 86.0, 34.0, Cancel);
+        add(620.0, 430.0, 84.0, 34.0, Save);
         buttons
     }
 
+    pub fn opacity_for_x(&self, x: f32) -> u8 {
+        let (sx, _, sw, _) = self.slider_rect();
+        (((x - sx) / sw) * 100.0).round().clamp(0.0, 100.0) as u8
+    }
+
+    fn slider_value_at(&self, x: f32, y: f32) -> Option<u8> {
+        if self.page != PrefPage::Appearance {
+            return None;
+        }
+        let (sx, sy, sw, sh) = self.slider_rect();
+        if x >= sx && x <= sx + sw && y >= sy && y <= sy + sh {
+            Some(self.opacity_for_x(x))
+        } else {
+            None
+        }
+    }
+
     pub fn update_hover(&mut self, x: f32, y: f32) -> bool {
-        let old = (self.hovered, self.hovered_row);
+        let old = (self.hovered, self.hovered_page);
         self.hovered = self
             .button_rects()
             .into_iter()
             .find(|rect| rect.contains(x, y))
             .map(|rect| rect.action);
-        self.hovered_row = (0..Self::ROWS.len()).find(|&i| {
-            let (rx, ry, rw, rh) = self.row_rect(i);
-            x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
-        });
-        old != (self.hovered, self.hovered_row)
+        self.hovered_page = PrefPage::ALL
+            .into_iter()
+            .find(|page| self.page_rect(*page).contains(x, y));
+        old != (self.hovered, self.hovered_page)
     }
 
     pub fn action_at(&self, x: f32, y: f32) -> Option<PrefAction> {
-        self.visible.then(|| self.button_rects()).and_then(|rects| {
-            rects
-                .into_iter()
-                .find(|rect| rect.contains(x, y))
-                .map(|rect| rect.action)
-        })
+        if !self.visible {
+            return None;
+        }
+        if let Some(page) = PrefPage::ALL
+            .into_iter()
+            .find(|page| self.page_rect(*page).contains(x, y))
+        {
+            return Some(PrefAction::SelectPage(page));
+        }
+        if let Some(value) = self.slider_value_at(x, y) {
+            return Some(PrefAction::OpacitySet(value));
+        }
+        self.button_rects()
+            .into_iter()
+            .find(|rect| rect.contains(x, y))
+            .map(|rect| rect.action)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sidebar_and_slider_hit_targets_follow_the_active_page() {
+        let mut panel = PreferencesPanel::new();
+        panel.open(980, 640, 1.0);
+
+        let background = panel.page_rect(PrefPage::Background);
+        assert_eq!(
+            panel.action_at(background.x + 10.0, background.y + 10.0),
+            Some(PrefAction::SelectPage(PrefPage::Background)),
+        );
+        let (x, y, w, h) = panel.slider_rect();
+        assert_eq!(
+            panel.action_at(x + w / 2.0, y + h / 2.0),
+            Some(PrefAction::OpacitySet(50))
+        );
+
+        panel.page = PrefPage::Background;
+        assert_eq!(panel.action_at(x + w / 2.0, y + h / 2.0), None);
+        let choose = panel
+            .button_rects()
+            .into_iter()
+            .find(|button| button.action == PrefAction::ChooseImage)
+            .unwrap();
+        assert_eq!(
+            panel.action_at(choose.x + 5.0, choose.y + 5.0),
+            Some(PrefAction::ChooseImage)
+        );
     }
 }
