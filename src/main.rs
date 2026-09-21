@@ -1,6 +1,7 @@
 #[cfg(not(target_os = "linux"))]
 compile_error!("Hafþi currently supports Linux/Wayland only.");
 
+mod background;
 mod menu;
 mod preferences;
 mod pty;
@@ -8,7 +9,7 @@ mod settings;
 mod terminal;
 mod wayland_effect;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result};
 use arboard::Clipboard;
@@ -17,6 +18,7 @@ use glyphon::{
     Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Weight,
 };
+use background::BackgroundRenderer;
 use menu::{ContextMenu, MenuAction};
 use preferences::{PrefAction, PreferencesPanel};
 use pty::{AppEvent, PtySession};
@@ -35,7 +37,7 @@ use winit::platform::wayland::WindowBuilderExtWayland;
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::EventLoopBuilder,
+    event_loop::{ControlFlow, EventLoopBuilder},
     keyboard::{Key, ModifiersState, NamedKey},
     window::{Window, WindowBuilder},
 };
@@ -204,6 +206,7 @@ struct GpuState {
     prefs_cancel_buffer: Buffer,
     prefs_save_buffer: Buffer,
     rect_renderer: RectRenderer,
+    background_renderer: BackgroundRenderer,
 }
 
 impl GpuState {
@@ -288,6 +291,14 @@ impl GpuState {
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
         let rect_renderer = RectRenderer::new(&device, format);
+        let mut background_renderer = BackgroundRenderer::new(&device, format);
+        if settings.branding_enabled {
+            if let Err(err) =
+                background_renderer.load(&device, &queue, &settings.branding_image)
+            {
+                eprintln!("Hafþi background: {err:#}");
+            }
+        }
 
         let mut text_buffer = Buffer::new(
             &mut font_system,
@@ -358,6 +369,7 @@ impl GpuState {
             prefs_cancel_buffer,
             prefs_save_buffer,
             rect_renderer,
+            background_renderer,
         })
     }
 
@@ -399,6 +411,16 @@ impl GpuState {
     fn apply_settings(&mut self, settings: Settings) {
         self.settings = settings;
 
+        if self.settings.branding_enabled {
+            if let Err(err) = self.background_renderer.load(
+                &self.device,
+                &self.queue,
+                &self.settings.branding_image,
+            ) {
+                eprintln!("Hafþi background: {err:#}");
+            }
+        }
+
         let font_size = self.settings.font_size;
         let line_height = self.settings.line_height;
         let menu_font_size = font_size * 0.78;
@@ -426,6 +448,22 @@ impl GpuState {
             &mut self.prefs_save_buffer,
         ] {
             buffer.set_metrics(&mut self.font_system, button_metrics);
+        }
+    }
+
+    fn background_deadline(&self) -> Option<Instant> {
+        if self.settings.branding_enabled {
+            self.background_renderer
+                .next_deadline(self.settings.branding_max_fps)
+        } else {
+            None
+        }
+    }
+
+    fn advance_background(&mut self) {
+        if self.settings.branding_enabled {
+            self.background_renderer
+                .advance(&self.queue, self.settings.branding_max_fps);
         }
     }
 
@@ -484,6 +522,8 @@ GIF max FPS               {:>2}\n\
         menu: &ContextMenu,
         prefs: &PreferencesPanel,
     ) -> Result<()> {
+        self.advance_background();
+
         if menu.visible {
             self.menu_buffer.set_text(
                 &mut self.font_system,
@@ -840,6 +880,16 @@ GIF max FPS               {:>2}\n\
                 occlusion_query_set: None,
             });
 
+            if self.settings.branding_enabled {
+                self.background_renderer.draw(
+                    &mut pass,
+                    &self.queue,
+                    self.config.width,
+                    self.config.height,
+                    self.settings.opacity as f32,
+                );
+            }
+
             if let Some(buffer) = rect_buffer.as_ref() {
                 self.rect_renderer
                     .draw(&mut pass, buffer, rect_vertices.len() as u32);
@@ -1023,6 +1073,8 @@ fn main() -> Result<()> {
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
                 if let Some(path) = path {
                     settings.branding_image = path;
+                    settings.branding_enabled = true;
+                    gpu.apply_settings(settings.clone());
                     dirty = true;
                     window.request_redraw();
                 }
@@ -1030,6 +1082,17 @@ fn main() -> Result<()> {
             Event::AboutToWait => {
                 if let Some(no_blur) = wayland_no_blur.as_mut() {
                     no_blur.dispatch_pending();
+                }
+
+                if let Some(deadline) = gpu.background_deadline() {
+                    if deadline <= Instant::now() {
+                        dirty = true;
+                        window.request_redraw();
+                    } else {
+                        elwt.set_control_flow(ControlFlow::WaitUntil(deadline));
+                    }
+                } else {
+                    elwt.set_control_flow(ControlFlow::Wait);
                 }
             }
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
@@ -1205,6 +1268,7 @@ fn main() -> Result<()> {
                                 }
                                 Some(PrefAction::ToggleBranding) => {
                                     settings.branding_enabled = !settings.branding_enabled;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::ChooseImage) => {
                                     // Use rfd's asynchronous portal API off the winit event
