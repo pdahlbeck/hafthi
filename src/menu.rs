@@ -16,7 +16,9 @@ pub enum MenuAction {
 #[derive(Debug, Clone)]
 pub struct MenuEntry {
     pub label: &'static str,
-    pub action: Option<MenuAction>,
+    pub shortcut: &'static str,
+    pub action: MenuAction,
+    pub separator_after: bool,
 }
 
 pub struct ContextMenu {
@@ -35,24 +37,21 @@ impl ContextMenu {
             visible: false,
             x: 0.0,
             y: 0.0,
-            width: 380.0,
-            row_height: 48.0,
+            width: 430.0,
+            row_height: 46.0,
             hovered: None,
             entries: vec![
-                MenuEntry { label: "Copy", action: Some(MenuAction::Copy) },
-                MenuEntry { label: "Paste", action: Some(MenuAction::Paste) },
-                MenuEntry { label: "Select All", action: Some(MenuAction::SelectAll) },
-                MenuEntry { label: "────────────", action: None },
-                MenuEntry { label: "New Window", action: Some(MenuAction::NewWindow) },
-                MenuEntry { label: "────────────", action: None },
-                MenuEntry { label: "Increase Font", action: Some(MenuAction::IncreaseFont) },
-                MenuEntry { label: "Decrease Font", action: Some(MenuAction::DecreaseFont) },
-                MenuEntry { label: "Reset Font Size", action: Some(MenuAction::ResetFont) },
-                MenuEntry { label: "Clear Scrollback", action: Some(MenuAction::ClearScrollback) },
-                MenuEntry { label: "────────────", action: None },
-                MenuEntry { label: "Preferences…", action: Some(MenuAction::Preferences) },
-                MenuEntry { label: "Edit Hafþi Config", action: Some(MenuAction::EditConfig) },
-                MenuEntry { label: "Quit", action: Some(MenuAction::Quit) },
+                MenuEntry { label: "Copy", shortcut: "Ctrl+Shift+C", action: MenuAction::Copy, separator_after: false },
+                MenuEntry { label: "Paste", shortcut: "Ctrl+Shift+V", action: MenuAction::Paste, separator_after: false },
+                MenuEntry { label: "Select All", shortcut: "", action: MenuAction::SelectAll, separator_after: true },
+                MenuEntry { label: "New Window", shortcut: "Ctrl+Shift+N", action: MenuAction::NewWindow, separator_after: true },
+                MenuEntry { label: "Increase Font", shortcut: "Ctrl++", action: MenuAction::IncreaseFont, separator_after: false },
+                MenuEntry { label: "Decrease Font", shortcut: "Ctrl+-", action: MenuAction::DecreaseFont, separator_after: false },
+                MenuEntry { label: "Reset Font Size", shortcut: "Ctrl+0", action: MenuAction::ResetFont, separator_after: false },
+                MenuEntry { label: "Clear Scrollback", shortcut: "", action: MenuAction::ClearScrollback, separator_after: true },
+                MenuEntry { label: "Preferences…", shortcut: "", action: MenuAction::Preferences, separator_after: false },
+                MenuEntry { label: "Edit Hafþi Config", shortcut: "", action: MenuAction::EditConfig, separator_after: true },
+                MenuEntry { label: "Quit", shortcut: "", action: MenuAction::Quit, separator_after: false },
             ],
         }
     }
@@ -66,15 +65,16 @@ impl ContextMenu {
         scale: f32,
         row_height: f32,
     ) {
-        self.width = 380.0 * scale;
+        self.width = 430.0 * scale;
         self.row_height = row_height.max(1.0);
         let height = self.height();
 
-        let max_x = (surface_width as f32 - self.width - 4.0).max(0.0);
-        let max_y = (surface_height as f32 - height - 4.0).max(0.0);
+        let margin = 8.0 * scale;
+        let max_x = (surface_width as f32 - self.width - margin).max(margin);
+        let max_y = (surface_height as f32 - height - margin).max(margin);
 
-        self.x = x.min(max_x).max(0.0);
-        self.y = y.min(max_y).max(0.0);
+        self.x = x.min(max_x).max(margin);
+        self.y = y.min(max_y).max(margin);
         self.visible = true;
         self.hovered = None;
     }
@@ -90,14 +90,14 @@ impl ContextMenu {
 
     pub fn update_hover(&mut self, x: f32, y: f32) -> bool {
         let old = self.hovered;
-        self.hovered = self.index_at(x, y).filter(|&i| self.entries[i].action.is_some());
+        self.hovered = self.index_at(x, y);
         old != self.hovered
     }
 
     pub fn action_at(&self, x: f32, y: f32) -> Option<MenuAction> {
         self.index_at(x, y)
             .and_then(|i| self.entries.get(i))
-            .and_then(|entry| entry.action)
+            .map(|entry| entry.action)
     }
 
     fn index_at(&self, x: f32, y: f32) -> Option<usize> {
@@ -118,6 +118,14 @@ impl ContextMenu {
         self.entries
             .iter()
             .map(|entry| entry.label)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn shortcuts(&self) -> String {
+        self.entries
+            .iter()
+            .map(|entry| entry.shortcut)
             .collect::<Vec<_>>()
             .join("\n")
     }
