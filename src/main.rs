@@ -474,7 +474,7 @@ impl GpuState {
 Transparency              {:>3}%\n\
 Padding                   {:.0} px\n\
 Scrollback                {:>6}\n\
-Background image          {:<8}\n\
+Image display             {:<8}\n\
 Image / GIF               {:<34}\n\
 GIF max FPS               {:>2}\n\
 \n",
@@ -1328,9 +1328,9 @@ fn main() -> Result<()> {
                                 Some(PrefAction::ToggleBranding) => {
                                     if !settings.branding_enabled {
                                         settings.branding_enabled = true;
-                                        settings.branding_mode = "banner".into();
-                                    } else if settings.branding_mode == "banner" {
                                         settings.branding_mode = "full".into();
+                                    } else if settings.branding_mode == "full" {
+                                        settings.branding_mode = "banner".into();
                                     } else {
                                         settings.branding_enabled = false;
                                     }
