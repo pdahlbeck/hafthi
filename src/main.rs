@@ -1207,19 +1207,24 @@ fn main() -> Result<()> {
                                     settings.branding_enabled = !settings.branding_enabled;
                                 }
                                 Some(PrefAction::ChooseImage) => {
-                                    // rfd's native Linux dialog must run on the UI thread on
-                                    // backends such as GTK. Running it on a worker thread made
-                                    // the dialog appear while its Select action could fail.
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .add_filter(
-                                            "Images and GIF",
-                                            &["png", "gif", "jpg", "jpeg", "webp"],
+                                    // Use rfd's asynchronous portal API off the winit event
+                                    // loop. The synchronous dialog blocks Wayland event
+                                    // dispatch and makes Hyprland report Hafþi as hung.
+                                    let dialog_proxy = proxy.clone();
+                                    std::thread::spawn(move || {
+                                        let chosen = pollster::block_on(
+                                            rfd::AsyncFileDialog::new()
+                                                .add_filter(
+                                                    "Images and GIF",
+                                                    &["png", "gif", "jpg", "jpeg", "webp"],
+                                                )
+                                                .pick_file(),
                                         )
-                                        .pick_file()
-                                    {
-                                        settings.branding_image =
-                                            path.to_string_lossy().into_owned();
-                                    }
+                                        .map(|file| file.path().to_string_lossy().into_owned());
+
+                                        let _ =
+                                            dialog_proxy.send_event(AppEvent::ImageChosen(chosen));
+                                    });
                                 }
                                 Some(PrefAction::GifFpsDown) => {
                                     settings.branding_max_fps = settings.branding_max_fps.saturating_sub(1).max(1);
