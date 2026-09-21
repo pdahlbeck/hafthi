@@ -12,5 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Wayland build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev desktop-file-utils
+      - run: desktop-file-validate assets/hafthi.desktop
       - run: cargo check
