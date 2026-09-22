@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.14:** adds optional Linux command help using tgpt and Pollinations in Preferences. Linux/Wayland is the only supported platform.
+> **Version 0.7.15:** fixes spaces in Command help questions and improves the Preferences layout. Linux/Wayland is the only supported platform.
 
 ### Optional Linux command help
 
