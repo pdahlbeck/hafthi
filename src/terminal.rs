@@ -587,23 +587,23 @@ mod foreground_tests {
     #[test]
     fn partial_screen_erase_preserves_previous_command_output() {
         let fg = Rgb::new(245, 245, 245);
-        let mut grid = TerminalGrid::new_with_theme(10, 4, fg, [fg; 16], 100);
+        let mut grid = TerminalGrid::new_with_theme(12, 4, fg, [fg; 16], 100);
         grid.feed(b"old output\r\nnew prompt\x1b[J");
-        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "old output");
-        assert_eq!(grid.current_row(1).iter().map(|cell| cell.ch).collect::<String>(), "new prompt");
-        assert_eq!(grid.cursor(), (0, 2));
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "old output  ");
+        assert_eq!(grid.current_row(1).iter().map(|cell| cell.ch).collect::<String>(), "new prompt  ");
+        assert_eq!(grid.cursor(), (10, 1));
     }
 
     #[test]
     fn screen_erase_modes_keep_cursor_and_erase_only_requested_cells() {
         let fg = Rgb::new(245, 245, 245);
         let mut grid = TerminalGrid::new_with_theme(5, 2, fg, [fg; 16], 100);
-        grid.feed(b"abcde\r\nfghij\x1b[1;3H\x1b[0J");
+        grid.feed(b"abcde\r\nfghij\x1b[2;3H\x1b[0J");
         assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "abcde");
         assert_eq!(grid.current_row(1).iter().map(|cell| cell.ch).collect::<String>(), "fg   ");
-        assert_eq!(grid.cursor(), (2, 0));
+        assert_eq!(grid.cursor(), (2, 1));
         grid.feed(b"\x1b[1J");
-        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "   de");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "     ");
         grid.feed(b"\x1b[2J");
         assert!(grid.cells.iter().all(|cell| cell.ch == ' '));
         assert_eq!(grid.cursor(), (2, 0));
