@@ -672,8 +672,8 @@ impl GpuState {
                 PrefPage::CommandHelp => {
                     add("OPTIONAL ASSISTANT", 226.0, 91.0, 350.0, 11.0, accent);
                     add("Linux command help", 226.0, 132.0, 330.0, 16.0, primary);
-                    add("Ask in plain language. Suggestions are never run for you.",
-                        226.0, 178.0, 470.0, 12.0, muted);
+                    add("Describe what you want to do in Linux.",
+                        226.0, 159.0, 470.0, 12.0, muted);
                     add("YOUR QUESTION", 226.0, 209.0, 280.0, 11.0, accent);
                     let question = if prefs.question_input.is_empty() {
                         "How do I find a file?".to_string()
@@ -685,10 +685,10 @@ impl GpuState {
                     add(&question, 239.0, 242.0, 452.0, 14.0,
                         if prefs.question_input.is_empty() { muted } else { primary });
                     if prefs.question_editing { add("▏", 683.0, 242.0, 14.0, 14.0, accent); }
-                    add("Uses tgpt and Pollinations. Your question is sent online.",
-                        226.0, 326.0, 475.0, 11.0, muted);
-                    add("Then press Enter at the shell prompt to install.",
-                        370.0, 357.0, 330.0, 12.0, muted);
+                    add("Answer appears in the terminal. Review commands before use.",
+                        226.0, 301.0, 357.0, 11.0, muted);
+                    add("Your question is sent online via Pollinations.",
+                        370.0, 360.0, 330.0, 11.0, muted);
                 }
             }
             for button in prefs.button_rects() {
@@ -1371,9 +1371,32 @@ fn tgpt_query_command(question: &str) -> String {
     format!("if command -v tgpt >/dev/null 2>&1; then tgpt --provider pollinations --quiet --whole '{quoted}'; else printf 'tgpt is not installed. Install it with: sudo pacman -S tgpt\\n'; fi\n")
 }
 
+fn append_question_text(input: &mut String, key: &Key) {
+    match key {
+        Key::Named(NamedKey::Space) => {
+            if input.chars().count() < 200 { input.push(' '); }
+        }
+        Key::Character(ch) => {
+            for character in ch.chars().filter(|c| !c.is_control()) {
+                if input.chars().count() < 200 { input.push(character); }
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod command_help_tests {
-    use super::tgpt_query_command;
+    use super::{append_question_text, tgpt_query_command};
+    use winit::keyboard::{Key, NamedKey};
+
+    #[test]
+    fn question_accepts_named_space_between_words() {
+        let mut question = String::from("how");
+        append_question_text(&mut question, &Key::Named(NamedKey::Space));
+        append_question_text(&mut question, &Key::Character("to".into()));
+        assert_eq!(question, "how to");
+    }
 
     #[test]
     fn question_is_quoted_as_one_shell_argument() {
@@ -1540,12 +1563,9 @@ fn run() -> Result<()> {
                                         }
                                     }
                                     Key::Named(NamedKey::Backspace) => { preferences.question_input.pop(); },
-                                    Key::Character(ch) if !modifiers.control_key() && !modifiers.super_key() => {
-                                        for character in ch.chars().filter(|c| !c.is_control()) {
-                                            if preferences.question_input.chars().count() < 200 {
-                                                preferences.question_input.push(character);
-                                            }
-                                        }
+                                    Key::Named(NamedKey::Space) | Key::Character(_)
+                                        if !modifiers.control_key() && !modifiers.super_key() => {
+                                        append_question_text(&mut preferences.question_input, &event.logical_key);
                                     }
                                     _ => {}
                                 }
