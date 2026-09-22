@@ -751,6 +751,18 @@ impl GpuState {
                 .context("failed to prepare GPU text")?;
         } else if menu.visible {
             let scale = self.settings.scale_factor.max(1.0);
+            // Terminal glyphs render after the menu surface. Clip them to the
+            // visible area around the menu so they cannot cover its labels.
+            let mut areas: Vec<TextArea<'_>> = terminal_regions_around_menu(
+                self.config.width, self.config.height, menu, scale,
+            ).into_iter().map(|bounds| TextArea {
+                buffer: &self.text_buffer,
+                left: self.settings.padding,
+                top: terminal_top(&self.settings),
+                scale: 1.0,
+                bounds,
+                default_color: terminal_area.default_color,
+            }).collect();
             let icon_area = TextArea {
                 buffer: &self.menu_icon_buffer,
                 left: menu.x + 20.0 * scale,
@@ -791,6 +803,7 @@ impl GpuState {
                 default_color: Color::rgb(157, 161, 169),
             };
 
+            areas.extend([icon_area, menu_area, shortcut_area]);
             self.text_renderer
                 .prepare(
                     &self.device,
@@ -801,7 +814,7 @@ impl GpuState {
                         width: self.config.width,
                         height: self.config.height,
                     },
-                    [terminal_area, icon_area, menu_area, shortcut_area],
+                    areas,
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
@@ -1195,6 +1208,39 @@ impl GpuState {
 
 fn banner_height(settings: &Settings) -> f32 {
     180.0 * settings.scale_factor.max(1.0)
+}
+
+fn terminal_regions_around_menu(
+    width: u32, height: u32, menu: &ContextMenu, scale: f32,
+) -> Vec<TextBounds> {
+    let (width, height) = (width as i32, height as i32);
+    let x0 = (menu.x - 2.0 * scale).floor().clamp(0.0, width as f32) as i32;
+    let x1 = (menu.x + menu.width + 2.0 * scale).ceil().clamp(0.0, width as f32) as i32;
+    let y0 = (menu.y - 2.0 * scale).floor().clamp(0.0, height as f32) as i32;
+    let y1 = (menu.y + menu.height() + 2.0 * scale).ceil().clamp(0.0, height as f32) as i32;
+    [
+        TextBounds { left: 0, top: 0, right: width, bottom: y0 },
+        TextBounds { left: 0, top: y0, right: x0, bottom: y1 },
+        TextBounds { left: x1, top: y0, right: width, bottom: y1 },
+        TextBounds { left: 0, top: y1, right: width, bottom: height },
+    ].into_iter().filter(|bounds| bounds.left < bounds.right && bounds.top < bounds.bottom).collect()
+}
+
+#[cfg(test)]
+mod menu_layer_tests {
+    use super::{terminal_regions_around_menu, ContextMenu};
+
+    #[test]
+    fn terminal_text_is_clipped_away_from_context_menu() {
+        let mut menu = ContextMenu::new();
+        menu.x = 100.0;
+        menu.y = 200.0;
+        menu.width = 300.0;
+        menu.row_height = 20.0;
+        let regions = terminal_regions_around_menu(800, 600, &menu, 1.0);
+        assert!(regions.iter().any(|r| r.left <= 50 && r.right > 50 && r.top <= 250 && r.bottom > 250));
+        assert!(!regions.iter().any(|r| r.left <= 200 && r.right > 200 && r.top <= 250 && r.bottom > 250));
+    }
 }
 
 fn truncate_label(value: &str, max_chars: usize) -> String {
