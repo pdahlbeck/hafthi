@@ -557,7 +557,8 @@ impl Perform for TerminalGrid {
                 let blank = self.blank_cell();
                 match mode {
                     0 => {
-                        for cell in &mut self.cells[cursor.min(self.cells.len())..] {
+                        let start = cursor.min(self.cells.len());
+                        for cell in &mut self.cells[start..] {
                             *cell = blank;
                         }
                     }
