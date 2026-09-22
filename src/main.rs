@@ -669,6 +669,27 @@ impl GpuState {
                     add(&self.settings.branding_max_fps.to_string(),
                         566.0, 355.0, 56.0, 13.0, muted);
                 }
+                PrefPage::CommandHelp => {
+                    add("OPTIONAL ASSISTANT", 226.0, 91.0, 350.0, 11.0, accent);
+                    add("Linux command help", 226.0, 132.0, 330.0, 16.0, primary);
+                    add("Ask in plain language. Suggestions are never run for you.",
+                        226.0, 178.0, 470.0, 12.0, muted);
+                    add("YOUR QUESTION", 226.0, 209.0, 280.0, 11.0, accent);
+                    let question = if prefs.question_input.is_empty() {
+                        "How do I find a file?".to_string()
+                    } else {
+                        let text = prefs.question_input.chars().rev().take(48).collect::<String>()
+                            .chars().rev().collect::<String>();
+                        format!("{}{}", if prefs.question_input.chars().count() > 48 { "…" } else { "" }, text)
+                    };
+                    add(&question, 239.0, 242.0, 452.0, 14.0,
+                        if prefs.question_input.is_empty() { muted } else { primary });
+                    if prefs.question_editing { add("▏", 683.0, 242.0, 14.0, 14.0, accent); }
+                    add("Uses tgpt and Pollinations. Your question is sent online.",
+                        226.0, 326.0, 475.0, 11.0, muted);
+                    add("Then press Enter at the shell prompt to install.",
+                        370.0, 357.0, 330.0, 12.0, muted);
+                }
             }
             for button in prefs.button_rects() {
                 let caption = match button.action {
@@ -687,10 +708,14 @@ impl GpuState {
                     PrefAction::ImageFull => "Full",
                     PrefAction::ChooseImage => "Choose…",
                     PrefAction::ClearImage => "Clear",
+                    PrefAction::ToggleCommandHelp => if self.settings.command_help_enabled { "On" } else { "Off" },
+                    PrefAction::AskQuestion => "Ask tgpt",
+                    PrefAction::InstallTgpt => "Install tgpt",
                     PrefAction::Cancel => "Cancel",
                     PrefAction::Save => "Save",
                     PrefAction::SelectPage(_) | PrefAction::OpacitySet(_)
-                    | PrefAction::TextColor(_) | PrefAction::EditTextColor => continue,
+                    | PrefAction::TextColor(_) | PrefAction::EditTextColor
+                    | PrefAction::EditQuestion => continue,
                 };
                 let font_size = if caption == "+" || caption == "−" { 18.0 } else { 13.0 };
                 let text_width = caption.chars().count() as f32 * font_size * 0.53;
@@ -947,6 +972,12 @@ impl GpuState {
                         shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                     }
                 }
+                PrefPage::CommandHelp => {
+                    for (y, h) in [(78.0, 100.0), (191.0, 144.0), (341.0, 56.0)] {
+                        shape(208.0, y, 512.0, h, 5.0, card_border);
+                        shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                    }
+                }
                 PrefPage::Background => {
                     for (y, h) in [(78.0, 100.0), (182.0, 131.0), (326.0, 70.0)] {
                         shape(208.0, y, 512.0, h, 5.0, card_border);
@@ -973,7 +1004,8 @@ impl GpuState {
                     shape(bx, by, 36.0, 32.0, 4.0, Settings::rgba_f32(swatch, 1.0));
                     continue;
                 }
-                let active = button.action == selected || button.action == PrefAction::Save;
+                let active = button.action == selected || button.action == PrefAction::Save
+                    || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled);
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
                     if hover { [0.12, 0.41, 0.63, 1.0] }
@@ -1331,6 +1363,27 @@ fn main() -> Result<()> {
     result
 }
 
+fn tgpt_query_command(question: &str) -> String {
+    let prompt = format!(
+        "Answer only questions about Linux terminal commands. Reply in Swedish with a short explanation, a command example and what it does. If unrelated to Linux commands, say you only help with Linux commands. Never suggest running a command automatically. Question: {question}"
+    );
+    let quoted = prompt.replace('\'', "'\\''");
+    format!("if command -v tgpt >/dev/null 2>&1; then tgpt --provider pollinations --quiet --whole '{quoted}'; else printf 'tgpt is not installed. Install it with: sudo pacman -S tgpt\\n'; fi\n")
+}
+
+#[cfg(test)]
+mod command_help_tests {
+    use super::tgpt_query_command;
+
+    #[test]
+    fn question_is_quoted_as_one_shell_argument() {
+        let command = tgpt_query_command("what's `touch /tmp/hafthi-test`?; echo unsafe");
+        assert!(command.contains("what'\\''s `touch /tmp/hafthi-test`?; echo unsafe'"));
+        assert!(command.contains("--provider pollinations --quiet --whole"));
+        assert!(!command.contains(" --shell "));
+    }
+}
+
 fn run() -> Result<()> {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
@@ -1472,6 +1525,34 @@ fn run() -> Result<()> {
                 WindowEvent::KeyboardInput { event, .. } => {
                     if event.state == ElementState::Pressed {
                         if preferences.visible {
+                            if preferences.question_editing {
+                                match &event.logical_key {
+                                    Key::Named(NamedKey::Escape) => preferences.question_editing = false,
+                                    Key::Named(NamedKey::Enter) => {
+                                        preferences.question_editing = false;
+                                        if settings.command_help_enabled && !preferences.question_input.trim().is_empty() {
+                                            let command = tgpt_query_command(preferences.question_input.trim());
+                                            let _ = settings.save();
+                                            preferences_backup = None;
+                                            preferences.close();
+                                            terminal.scroll_to_bottom();
+                                            pty.write(command.as_bytes());
+                                        }
+                                    }
+                                    Key::Named(NamedKey::Backspace) => { preferences.question_input.pop(); },
+                                    Key::Character(ch) if !modifiers.control_key() && !modifiers.super_key() => {
+                                        for character in ch.chars().filter(|c| !c.is_control()) {
+                                            if preferences.question_input.chars().count() < 200 {
+                                                preferences.question_input.push(character);
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                dirty = true;
+                                window.request_redraw();
+                                return;
+                            }
                             if preferences.color_editing {
                                 match &event.logical_key {
                                     Key::Named(NamedKey::Escape) => {
@@ -1507,6 +1588,21 @@ fn run() -> Result<()> {
                                 dirty = true;
                                 window.request_redraw();
                                 return;
+                            }
+                            if preferences.page == PrefPage::CommandHelp {
+                                if event.logical_key == Key::Named(NamedKey::Space) {
+                                    settings.command_help_enabled = !settings.command_help_enabled;
+                                    gpu.apply_settings(settings.clone());
+                                    dirty = true;
+                                    window.request_redraw();
+                                    return;
+                                }
+                                if event.logical_key == Key::Named(NamedKey::Enter) {
+                                    preferences.question_editing = true;
+                                    dirty = true;
+                                    window.request_redraw();
+                                    return;
+                                }
                             }
                             if event.logical_key == Key::Named(NamedKey::Escape) {
                                 if let Some(original) = preferences_backup.take() {
@@ -1547,6 +1643,15 @@ fn run() -> Result<()> {
 
                         if ctrl_shift {
                             match &event.logical_key {
+                                Key::Character(ch) if ch.eq_ignore_ascii_case("h") => {
+                                    preferences_backup = Some(settings.clone());
+                                    preferences.open(gpu.config.width, gpu.config.height, settings.scale_factor);
+                                    preferences.page = PrefPage::CommandHelp;
+                                    preferences.question_editing = settings.command_help_enabled;
+                                    dirty = true;
+                                    window.request_redraw();
+                                    return;
+                                }
                                 Key::Character(ch) if ch.eq_ignore_ascii_case("c") => {
                                     copy_selection_to_clipboard(
                                         &terminal, selection, clipboard.as_mut(), &mut recent_copy,
@@ -1639,6 +1744,34 @@ fn run() -> Result<()> {
                                 Some(PrefAction::SelectPage(page)) => {
                                     preferences.page = page;
                                     preferences.hovered = None;
+                                    preferences.question_editing = false;
+                                }
+                                Some(PrefAction::ToggleCommandHelp) => {
+                                    settings.command_help_enabled = !settings.command_help_enabled;
+                                    gpu.apply_settings(settings.clone());
+                                }
+                                Some(PrefAction::EditQuestion) => {
+                                    preferences.question_editing = true;
+                                }
+                                Some(PrefAction::AskQuestion) => {
+                                    if settings.command_help_enabled && !preferences.question_input.trim().is_empty() {
+                                        let command = tgpt_query_command(preferences.question_input.trim());
+                                        let _ = settings.save();
+                                        preferences_backup = None;
+                                        preferences.close();
+                                        terminal.scroll_to_bottom();
+                                        pty.write(command.as_bytes());
+                                    }
+                                }
+                                Some(PrefAction::InstallTgpt) => {
+                                    preferences.close();
+                                    if let Some(original) = preferences_backup.take() {
+                                        settings = original;
+                                        gpu.apply_settings(settings.clone());
+                                    }
+                                    // Place the installation command at the shell prompt;
+                                    // the user decides whether to execute it.
+                                    pty.write(b"sudo pacman -S --needed tgpt");
                                 }
                                 Some(PrefAction::FontFamilyPrev | PrefAction::FontFamilyNext) => {
                                     let index = font_families.iter().position(|family| family == &settings.font_family).unwrap_or(0);

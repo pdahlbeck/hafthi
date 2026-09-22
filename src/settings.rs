@@ -15,6 +15,7 @@ pub struct Settings {
     pub window_width: u32,
     pub window_height: u32,
     pub scrollback: usize,
+    pub command_help_enabled: bool,
     pub foreground: Rgb,
     pub background: Rgb,
     pub cursor: Rgb,
@@ -41,6 +42,7 @@ impl Default for Settings {
             window_width: 980,
             window_height: 640,
             scrollback: 15_000,
+            command_help_enabled: false,
             foreground: Rgb::new(0, 0, 0),
             background: Rgb::new(246, 244, 241),
             cursor: Rgb::new(0, 0, 0),
@@ -171,6 +173,9 @@ impl Settings {
         if let Some(v) = get("general", "scrollback").and_then(|v| v.parse::<usize>().ok()) {
             out.scrollback = v.max(100);
         }
+        if let Some(v) = get("command_help", "enabled") {
+            out.command_help_enabled = matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on");
+        }
         if let Some(v) = get("gpu", "font_scale").and_then(|v| v.parse::<f32>().ok()) {
             out.gpu_font_scale = v.clamp(0.75, 3.0);
         }
@@ -293,6 +298,8 @@ impl Settings {
         set_key(&mut text, "general", "opacity", &format!("{:.2}", self.opacity));
         set_key(&mut text, "general", "padding", &format!("{:.0}", self.logical_padding()));
         set_key(&mut text, "general", "scrollback", &self.scrollback.to_string());
+        set_key(&mut text, "command_help", "enabled",
+            if self.command_help_enabled { "true" } else { "false" });
         set_key(&mut text, "colors", "foreground", &format!(
             "#{:02x}{:02x}{:02x}", self.foreground.r, self.foreground.g, self.foreground.b
         ));
