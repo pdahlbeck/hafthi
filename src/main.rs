@@ -22,7 +22,7 @@ use glyphon::{
 };
 use background::BackgroundRenderer;
 use menu::{ContextMenu, MenuAction};
-use preferences::{PrefAction, PrefPage, PreferencesPanel};
+use preferences::{PrefAction, PrefPage, PreferencesPanel, TEXT_SWATCHES};
 use pty::{AppEvent, PtySession};
 use settings::{config_path, Settings};
 use terminal::TerminalGrid;
@@ -635,13 +635,22 @@ impl GpuState {
                         226.0, 356.0, 460.0, 12.0, muted);
                 }
                 PrefPage::Terminal => {
-                    add("HISTORY", 226.0, 91.0, 180.0, 11.0, accent);
-                    add("Scrollback lines", 226.0, 133.0, 200.0, 15.0, primary);
-                    add(&self.settings.scrollback.to_string(), 528.0, 134.0, 94.0, 13.0, muted);
-                    add("How many lines the terminal keeps above the screen.",
-                        226.0, 185.0, 460.0, 12.0, muted);
-                    add("Changes are shown immediately. Save to keep them.",
-                        226.0, 352.0, 460.0, 12.0, muted);
+                    add("FONT", 226.0, 91.0, 180.0, 11.0, accent);
+                    add(&truncate_label(&self.settings.font_family, 36),
+                        226.0, 131.0, 394.0, 15.0, primary);
+                    add("TEXT COLOR", 226.0, 200.0, 180.0, 11.0, accent);
+                    add("Custom hex", 226.0, 283.0, 220.0, 14.0, primary);
+                    let hex = if prefs.color_editing {
+                        format!("#{}▏", prefs.color_input)
+                    } else {
+                        format!("#{:02X}{:02X}{:02X}", self.settings.foreground.r,
+                            self.settings.foreground.g, self.settings.foreground.b)
+                    };
+                    add(&hex, 540.0, 284.0, 155.0, 13.0,
+                        if prefs.color_error { Color::rgb(245, 136, 136) } else { primary });
+                    add("HISTORY", 226.0, 336.0, 180.0, 11.0, accent);
+                    add("Scrollback lines", 226.0, 357.0, 200.0, 15.0, primary);
+                    add(&self.settings.scrollback.to_string(), 530.0, 358.0, 90.0, 13.0, muted);
                 }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
@@ -664,10 +673,12 @@ impl GpuState {
             for button in prefs.button_rects() {
                 let caption = match button.action {
                     PrefAction::FontDown
+                    | PrefAction::FontFamilyPrev
                     | PrefAction::PaddingDown
                     | PrefAction::ScrollbackDown
                     | PrefAction::GifFpsDown => "−",
                     PrefAction::FontUp
+                    | PrefAction::FontFamilyNext
                     | PrefAction::PaddingUp
                     | PrefAction::ScrollbackUp
                     | PrefAction::GifFpsUp => "+",
@@ -678,7 +689,8 @@ impl GpuState {
                     PrefAction::ClearImage => "Clear",
                     PrefAction::Cancel => "Cancel",
                     PrefAction::Save => "Save",
-                    PrefAction::SelectPage(_) | PrefAction::OpacitySet(_) => continue,
+                    PrefAction::SelectPage(_) | PrefAction::OpacitySet(_)
+                    | PrefAction::TextColor(_) | PrefAction::EditTextColor => continue,
                 };
                 let font_size = if caption == "+" || caption == "−" { 18.0 } else { 13.0 };
                 let text_width = caption.chars().count() as f32 * font_size * 0.53;
@@ -930,9 +942,10 @@ impl GpuState {
                         [0.55, 0.77, 0.90, 1.0]);
                 }
                 PrefPage::Terminal => {
-                    shape(208.0, 78.0, 512.0, 229.0, 5.0, card_border);
-                    shape(209.0, 79.0, 510.0, 227.0, 4.0, card);
-                    shape(208.0, 322.0, 512.0, 75.0, 5.0, card);
+                    for (y, h) in [(78.0, 100.0), (188.0, 137.0), (331.0, 66.0)] {
+                        shape(208.0, y, 512.0, h, 5.0, card_border);
+                        shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                    }
                 }
                 PrefPage::Background => {
                     for (y, h) in [(78.0, 100.0), (182.0, 131.0), (326.0, 70.0)] {
@@ -949,6 +962,17 @@ impl GpuState {
                 PrefAction::ImageFull
             };
             for button in prefs.button_rects() {
+                if let PrefAction::TextColor(index) = button.action {
+                    let swatch = TEXT_SWATCHES[index as usize];
+                    let bx = (button.x - prefs.x) / scale;
+                    let by = (button.y - prefs.y) / scale;
+                    let active = self.settings.foreground == swatch;
+                    shape(bx - 2.0, by - 2.0, 40.0, 36.0, 6.0,
+                        if active { [0.36, 0.72, 0.95, 1.0] }
+                        else { [0.18, 0.21, 0.24, 1.0] });
+                    shape(bx, by, 36.0, 32.0, 4.0, Settings::rgba_f32(swatch, 1.0));
+                    continue;
+                }
                 let active = button.action == selected || button.action == PrefAction::Save;
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
@@ -1369,6 +1393,13 @@ fn run() -> Result<()> {
     let mut context_menu = ContextMenu::new();
     let mut preferences = PreferencesPanel::new();
     let mut preferences_backup: Option<Settings> = None;
+    let mut font_families: Vec<String> = gpu.font_system.db().faces()
+        .filter(|face| face.monospaced)
+        .filter_map(|face| face.families.first().map(|(name, _)| name.clone()))
+        .collect();
+    font_families.push(settings.font_family.clone());
+    font_families.sort_by_key(|family| family.to_lowercase());
+    font_families.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
 
     gpu.update_terminal_text(&terminal);
 
@@ -1441,9 +1472,46 @@ fn run() -> Result<()> {
                 WindowEvent::KeyboardInput { event, .. } => {
                     if event.state == ElementState::Pressed {
                         if preferences.visible {
+                            if preferences.color_editing {
+                                match &event.logical_key {
+                                    Key::Named(NamedKey::Escape) => {
+                                        preferences.color_editing = false;
+                                        preferences.color_error = false;
+                                    }
+                                    Key::Named(NamedKey::Enter) => {
+                                        if let Some(color) = settings::parse_hex_color(&preferences.color_input) {
+                                            settings.foreground = color;
+                                            terminal.set_default_foreground(color);
+                                            gpu.apply_settings(settings.clone());
+                                            gpu.update_terminal_text(&terminal);
+                                            preferences.color_editing = false;
+                                            preferences.color_error = false;
+                                        } else {
+                                            preferences.color_error = true;
+                                        }
+                                    }
+                                    Key::Named(NamedKey::Backspace) => {
+                                        preferences.color_input.pop();
+                                        preferences.color_error = false;
+                                    }
+                                    Key::Character(ch) if !modifiers.control_key() => {
+                                        for digit in ch.chars().filter(|digit| digit.is_ascii_hexdigit()) {
+                                            if preferences.color_input.len() < 6 {
+                                                preferences.color_input.push(digit.to_ascii_uppercase());
+                                            }
+                                        }
+                                        preferences.color_error = false;
+                                    }
+                                    _ => {}
+                                }
+                                dirty = true;
+                                window.request_redraw();
+                                return;
+                            }
                             if event.logical_key == Key::Named(NamedKey::Escape) {
                                 if let Some(original) = preferences_backup.take() {
                                     settings = original;
+                                    terminal.set_default_foreground(settings.foreground);
                                     gpu.apply_settings(settings.clone());
 
                                     let size = window.inner_size();
@@ -1572,6 +1640,28 @@ fn run() -> Result<()> {
                                     preferences.page = page;
                                     preferences.hovered = None;
                                 }
+                                Some(PrefAction::FontFamilyPrev | PrefAction::FontFamilyNext) => {
+                                    let index = font_families.iter().position(|family| family == &settings.font_family).unwrap_or(0);
+                                    let next = if action == Some(PrefAction::FontFamilyPrev) {
+                                        (index + font_families.len() - 1) % font_families.len()
+                                    } else { (index + 1) % font_families.len() };
+                                    settings.font_family = font_families[next].clone();
+                                    gpu.apply_settings(settings.clone());
+                                }
+                                Some(PrefAction::TextColor(index)) => {
+                                    let color = TEXT_SWATCHES[index as usize];
+                                    settings.foreground = color;
+                                    terminal.set_default_foreground(color);
+                                    gpu.apply_settings(settings.clone());
+                                    preferences.color_editing = false;
+                                    preferences.color_error = false;
+                                }
+                                Some(PrefAction::EditTextColor) => {
+                                    preferences.color_input = format!("{:02X}{:02X}{:02X}",
+                                        settings.foreground.r, settings.foreground.g, settings.foreground.b);
+                                    preferences.color_editing = true;
+                                    preferences.color_error = false;
+                                }
                                 Some(PrefAction::FontDown) => {
                                     settings.zoom_by(1.0 / 1.05);
                                     gpu.apply_settings(settings.clone());
@@ -1664,6 +1754,18 @@ fn run() -> Result<()> {
                                     settings.branding_max_fps = (settings.branding_max_fps + 1).min(30);
                                 }
                                 Some(PrefAction::Save) => {
+                                    if preferences.color_editing {
+                                        if let Some(color) = settings::parse_hex_color(&preferences.color_input) {
+                                            settings.foreground = color;
+                                            terminal.set_default_foreground(color);
+                                            gpu.apply_settings(settings.clone());
+                                        } else {
+                                            preferences.color_error = true;
+                                            dirty = true;
+                                            window.request_redraw();
+                                            return;
+                                        }
+                                    }
                                     let _ = settings.save();
                                     preferences_backup = None;
                                     preferences.close();
@@ -1671,6 +1773,7 @@ fn run() -> Result<()> {
                                 Some(PrefAction::Cancel) => {
                                     if let Some(original) = preferences_backup.take() {
                                         settings = original;
+                                        terminal.set_default_foreground(settings.foreground);
                                         gpu.apply_settings(settings.clone());
                                         terminal.set_scrollback_limit(settings.scrollback);
                                     }

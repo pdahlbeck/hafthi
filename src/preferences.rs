@@ -27,6 +27,10 @@ pub enum PrefAction {
     PaddingUp,
     ScrollbackDown,
     ScrollbackUp,
+    FontFamilyPrev,
+    FontFamilyNext,
+    TextColor(u8),
+    EditTextColor,
     ImageOff,
     ImageBanner,
     ImageFull,
@@ -63,6 +67,9 @@ pub struct PreferencesPanel {
     pub page: PrefPage,
     pub hovered: Option<PrefAction>,
     pub hovered_page: Option<PrefPage>,
+    pub color_editing: bool,
+    pub color_input: String,
+    pub color_error: bool,
 }
 
 impl PreferencesPanel {
@@ -82,6 +89,9 @@ impl PreferencesPanel {
             page: PrefPage::Appearance,
             hovered: None,
             hovered_page: None,
+            color_editing: false,
+            color_input: String::new(),
+            color_error: false,
         }
     }
 
@@ -100,12 +110,15 @@ impl PreferencesPanel {
         self.visible = true;
         self.hovered = None;
         self.hovered_page = None;
+        self.color_editing = false;
+        self.color_error = false;
     }
 
     pub fn close(&mut self) {
         self.visible = false;
         self.hovered = None;
         self.hovered_page = None;
+        self.color_editing = false;
     }
 
     pub fn height(&self) -> f32 {
@@ -157,8 +170,14 @@ impl PreferencesPanel {
                 add(669.0, 289.0, 35.0, 34.0, PaddingUp);
             }
             PrefPage::Terminal => {
-                add(626.0, 126.0, 35.0, 34.0, ScrollbackDown);
-                add(669.0, 126.0, 35.0, 34.0, ScrollbackUp);
+                add(626.0, 125.0, 35.0, 34.0, FontFamilyPrev);
+                add(669.0, 125.0, 35.0, 34.0, FontFamilyNext);
+                for i in 0..TEXT_SWATCHES.len() {
+                    add(226.0 + i as f32 * 54.0, 238.0, 36.0, 32.0, TextColor(i as u8));
+                }
+                add(526.0, 278.0, 178.0, 31.0, EditTextColor);
+                add(626.0, 351.0, 35.0, 34.0, ScrollbackDown);
+                add(669.0, 351.0, 35.0, 34.0, ScrollbackUp);
             }
             PrefPage::Background => {
                 add(226.0, 126.0, 106.0, 35.0, ImageOff);
@@ -273,3 +292,11 @@ mod tests {
         assert!(panel.y + panel.height() <= 440.0);
     }
 }
+use crate::terminal::Rgb;
+
+pub const TEXT_SWATCHES: [Rgb; 8] = [
+    Rgb::new(23, 26, 29), Rgb::new(242, 242, 242),
+    Rgb::new(242, 226, 193), Rgb::new(103, 211, 237),
+    Rgb::new(246, 189, 96), Rgb::new(145, 218, 142),
+    Rgb::new(199, 167, 245), Rgb::new(244, 153, 166),
+];
