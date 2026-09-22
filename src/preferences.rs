@@ -84,8 +84,6 @@ impl PreferencesPanel {
     pub const WIDTH: f32 = 736.0;
     pub const HEIGHT: f32 = 476.0;
     pub const SIDEBAR_WIDTH: f32 = 192.0;
-    pub const CONTENT_X: f32 = 208.0;
-    pub const CONTENT_WIDTH: f32 = 512.0;
 
     pub fn new() -> Self {
         Self {
