@@ -1,3 +1,5 @@
+![Hafþi terminal — preview of the terminal and preferences](assets/hafthi-banner.jpg)
+
 # Hafþi
 
 **Hafþi is a GPU-accelerated terminal emulator for Linux/Wayland, written in Rust and rendered with wgpu.**
