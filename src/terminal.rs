@@ -18,6 +18,7 @@ impl Rgb {
 pub struct CellStyle {
     pub fg: Rgb,
     pub bold: bool,
+    pub uses_default_fg: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +50,7 @@ impl Default for CellStyle {
         Self {
             fg: DEFAULT_FG,
             bold: false,
+            uses_default_fg: true,
         }
     }
 }
@@ -64,6 +66,7 @@ impl TerminalGrid {
         let style = CellStyle {
             fg: default_fg,
             bold: false,
+            uses_default_fg: true,
         };
         Self {
             cols,
@@ -128,6 +131,26 @@ impl TerminalGrid {
             self.history.pop_front();
         }
         self.view_offset = self.view_offset.min(self.history.len());
+        self.dirty = true;
+    }
+
+    pub fn set_default_foreground(&mut self, color: Rgb) {
+        self.default_fg = color;
+        if self.current_style.uses_default_fg {
+            self.current_style.fg = color;
+        }
+        for cell in &mut self.cells {
+            if cell.style.uses_default_fg {
+                cell.style.fg = color;
+            }
+        }
+        for row in &mut self.history {
+            for cell in row {
+                if cell.style.uses_default_fg {
+                    cell.style.fg = color;
+                }
+            }
+        }
         self.dirty = true;
     }
 
@@ -320,6 +343,7 @@ impl TerminalGrid {
             style: CellStyle {
                 fg: self.default_fg,
                 bold: false,
+                uses_default_fg: true,
             },
         }
     }
@@ -378,6 +402,7 @@ impl TerminalGrid {
     fn set_ansi_index(&mut self, idx: usize) {
         if let Some(color) = self.ansi.get(idx).copied() {
             self.current_style.fg = color;
+            self.current_style.uses_default_fg = false;
         }
     }
 
@@ -413,15 +438,23 @@ impl TerminalGrid {
 
         while i < values.len() {
             match values[i] {
-                0 => self.current_style = CellStyle { fg: self.default_fg, bold: false },
+                0 => self.current_style = CellStyle {
+                    fg: self.default_fg,
+                    bold: false,
+                    uses_default_fg: true,
+                },
                 1 => self.current_style.bold = true,
                 22 => self.current_style.bold = false,
                 30..=37 => self.set_ansi_index((values[i] - 30) as usize),
-                39 => self.current_style.fg = self.default_fg,
+                39 => {
+                    self.current_style.fg = self.default_fg;
+                    self.current_style.uses_default_fg = true;
+                }
                 90..=97 => self.set_ansi_index((values[i] - 90 + 8) as usize),
                 38 => {
                     if i + 2 < values.len() && values[i + 1] == 5 {
                         self.current_style.fg = self.ansi256(values[i + 2]);
+                        self.current_style.uses_default_fg = false;
                         i += 2;
                     } else if i + 4 < values.len() && values[i + 1] == 2 {
                         self.current_style.fg = Rgb::new(
@@ -429,6 +462,7 @@ impl TerminalGrid {
                             values[i + 3].min(255) as u8,
                             values[i + 4].min(255) as u8,
                         );
+                        self.current_style.uses_default_fg = false;
                         i += 4;
                     }
                 }
@@ -522,5 +556,27 @@ impl Perform for TerminalGrid {
         }
 
         self.dirty = true;
+    }
+}
+
+#[cfg(test)]
+mod foreground_tests {
+    use super::*;
+
+    #[test]
+    fn changing_default_color_keeps_explicit_ansi_colors() {
+        let default = Rgb::new(10, 20, 30);
+        let red = Rgb::new(200, 30, 40);
+        let mut ansi = [default; 16];
+        ansi[1] = red;
+        let mut grid = TerminalGrid::new_with_theme(8, 2, default, ansi, 100);
+        grid.feed(b"A\x1b[31mR\x1b[0mZ");
+        let changed = Rgb::new(230, 220, 210);
+        grid.set_default_foreground(changed);
+        assert_eq!(grid.cells[0].style.fg, changed);
+        assert_eq!(grid.cells[1].style.fg, red);
+        assert_eq!(grid.cells[2].style.fg, changed);
+        grid.feed(b"N");
+        assert_eq!(grid.cells[3].style.fg, changed);
     }
 }
