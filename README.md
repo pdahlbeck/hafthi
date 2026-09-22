@@ -4,11 +4,11 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.16:** lets Command help answer in the Linux system language and adds an Ask tgpt entry to the right-click menu. Linux/Wayland is the only supported platform.
+> **Version 0.7.17:** keeps the long tgpt prompt inside Hafþi so only a short question command appears in the terminal. Linux/Wayland is the only supported platform.
 
 ### Optional Linux command help
 
-Open **Preferences → Command help** (or press **Ctrl+Shift+H**) and turn the feature on. Click **Install tgpt** to place `sudo pacman -S --needed tgpt` at your shell prompt, then press Enter to install it. When enabled, **Ask tgpt…** also appears in the right-click menu and opens the question field directly. Type a question and press Enter or click **Ask tgpt**. The answer appears in the terminal in the language selected by your Linux locale (`LC_ALL`, `LANGUAGE`, `LC_MESSAGES`, or `LANG`), with English as a fallback. Your question is sent to the online provider; suggested commands are never run automatically. This is an optional service and requires an internet connection. Press Space to toggle the feature when the Command help page is open, or Enter to focus its question field.
+Open **Preferences → Command help** (or press **Ctrl+Shift+H**) and turn the feature on. Click **Install tgpt** to place `sudo pacman -S --needed tgpt` at your shell prompt, then press Enter to install it. When enabled, **Ask tgpt…** also appears in the right-click menu and opens the question field directly. Type a question and press Enter or click **Ask tgpt**. The terminal shows a short `hafthi --ask 'your question'` command and then the answer; the full instructions to tgpt stay inside Hafþi. Answers use the language selected by your Linux locale (`LC_ALL`, `LANGUAGE`, `LC_MESSAGES`, or `LANG`), with English as a fallback. Your question is sent to the online provider; suggested commands are never run automatically. This is an optional service and requires an internet connection. Press Space to toggle the feature when the Command help page is open, or Enter to focus its question field.
 
 ## Current stack
 
