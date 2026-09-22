@@ -3,16 +3,18 @@ pub enum PrefPage {
     Appearance,
     Terminal,
     Background,
+    CommandHelp,
 }
 
 impl PrefPage {
-    pub const ALL: [Self; 3] = [Self::Appearance, Self::Terminal, Self::Background];
+    pub const ALL: [Self; 4] = [Self::Appearance, Self::Terminal, Self::Background, Self::CommandHelp];
 
     pub fn title(self) -> &'static str {
         match self {
             Self::Appearance => "Appearance",
             Self::Terminal => "Terminal",
             Self::Background => "Background",
+            Self::CommandHelp => "Command help",
         }
     }
 }
@@ -31,6 +33,10 @@ pub enum PrefAction {
     FontFamilyNext,
     TextColor(u8),
     EditTextColor,
+    ToggleCommandHelp,
+    EditQuestion,
+    AskQuestion,
+    InstallTgpt,
     ImageOff,
     ImageBanner,
     ImageFull,
@@ -70,6 +76,8 @@ pub struct PreferencesPanel {
     pub color_editing: bool,
     pub color_input: String,
     pub color_error: bool,
+    pub question_editing: bool,
+    pub question_input: String,
 }
 
 impl PreferencesPanel {
@@ -92,6 +100,8 @@ impl PreferencesPanel {
             color_editing: false,
             color_input: String::new(),
             color_error: false,
+            question_editing: false,
+            question_input: String::new(),
         }
     }
 
@@ -112,6 +122,7 @@ impl PreferencesPanel {
         self.hovered_page = None;
         self.color_editing = false;
         self.color_error = false;
+        self.question_editing = false;
     }
 
     pub fn close(&mut self) {
@@ -119,6 +130,7 @@ impl PreferencesPanel {
         self.hovered = None;
         self.hovered_page = None;
         self.color_editing = false;
+        self.question_editing = false;
     }
 
     pub fn height(&self) -> f32 {
@@ -187,6 +199,12 @@ impl PreferencesPanel {
                 add(618.0, 260.0, 86.0, 34.0, ClearImage);
                 add(626.0, 348.0, 35.0, 34.0, GifFpsDown);
                 add(669.0, 348.0, 35.0, 34.0, GifFpsUp);
+            }
+            PrefPage::CommandHelp => {
+                add(620.0, 125.0, 84.0, 34.0, ToggleCommandHelp);
+                add(226.0, 235.0, 478.0, 38.0, EditQuestion);
+                add(590.0, 287.0, 114.0, 35.0, AskQuestion);
+                add(226.0, 351.0, 134.0, 35.0, InstallTgpt);
             }
         }
         add(526.0, 430.0, 86.0, 34.0, Cancel);
