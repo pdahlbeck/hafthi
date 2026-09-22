@@ -1349,6 +1349,10 @@ fn request_hyprland_no_blur() {
 
 
 fn main() -> Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("--ask") {
+        let question = std::env::args().nth(2).unwrap_or_default();
+        return run_command_help(&question);
+    }
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         diagnostics::record(&format!("panic: {info}"));
@@ -1384,13 +1388,44 @@ fn system_response_locale() -> String {
     response_locale(lc_all.as_deref(), language.as_deref(), lc_messages.as_deref(), lang.as_deref())
 }
 
-fn tgpt_query_command(question: &str) -> String {
+fn tgpt_prompt(question: &str) -> String {
     let locale = system_response_locale();
-    let prompt = format!(
-        "Answer only questions about Linux terminal commands. Respond in the language of the user's Linux locale ({locale}), with a short explanation, a command example and what it does. If unrelated to Linux commands, say you only help with Linux commands. Never suggest running a command automatically. Question: {question}"
-    );
-    let quoted = prompt.replace('\'', "'\\''");
-    format!("if command -v tgpt >/dev/null 2>&1; then tgpt --provider pollinations --quiet --whole '{quoted}'; else printf 'tgpt is not installed. Install it with: sudo pacman -S tgpt\\n'; fi\n")
+    format!(
+        "Answer only questions about Linux terminal commands. Respond in the language of the user's Linux locale ({locale}). Use plain text without Markdown, code fences or formatting marks. Give a short explanation, one command on its own line, and what it does. If unrelated to Linux commands, say you only help with Linux commands. Never suggest running a command automatically. Question: {question}"
+    )
+}
+
+fn run_command_help(question: &str) -> Result<()> {
+    anyhow::ensure!(!question.trim().is_empty(), "Enter a question for tgpt");
+    let prompt = tgpt_prompt(question);
+    match std::process::Command::new("tgpt")
+        .args(["--provider", "pollinations", "--quiet", "--whole", &prompt])
+        .status()
+    {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => anyhow::bail!("tgpt exited with {status}"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("tgpt is not installed. Install it with: sudo pacman -S tgpt");
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn tgpt_query_command(question: &str) -> String {
+    let executable = std::env::current_exe().expect("Hafþi executable path");
+    let short_name = std::env::var_os("PATH")
+        .and_then(|path| executable.parent().map(|parent| {
+            std::env::split_paths(&path).any(|entry| entry == parent)
+        }))
+        .unwrap_or(false);
+    let program = if short_name { "hafthi".to_string() }
+        else { executable.to_string_lossy().into_owned() };
+    format!("{} --ask {}\n", shell_quote(&program), shell_quote(question))
 }
 
 fn append_question_text(input: &mut String, key: &Key) {
@@ -1409,7 +1444,7 @@ fn append_question_text(input: &mut String, key: &Key) {
 
 #[cfg(test)]
 mod command_help_tests {
-    use super::{append_question_text, response_locale, tgpt_query_command};
+    use super::{append_question_text, response_locale, shell_quote, tgpt_query_command};
     use winit::keyboard::{Key, NamedKey};
 
     #[test]
@@ -1421,11 +1456,11 @@ mod command_help_tests {
     }
 
     #[test]
-    fn question_is_quoted_as_one_shell_argument() {
+    fn question_is_quoted_as_one_shell_argument_without_verbose_prompt() {
         let command = tgpt_query_command("what's `touch /tmp/hafthi-test`?; echo unsafe");
-        assert!(command.contains("what'\\''s `touch /tmp/hafthi-test`?; echo unsafe'"));
-        assert!(command.contains("--provider pollinations --quiet --whole"));
-        assert!(!command.contains(" --shell "));
+        assert!(command.contains(" --ask 'what'\\''s `touch /tmp/hafthi-test`?; echo unsafe'"));
+        assert!(!command.contains("Answer only questions"));
+        assert_eq!(shell_quote("it's safe"), "'it'\\''s safe'");
     }
 
     #[test]
