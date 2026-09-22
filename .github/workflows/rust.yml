@@ -16,3 +16,11 @@ jobs:
       - run: desktop-file-validate assets/hafthi.desktop
       - run: cargo check
       - run: cargo test
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n run-podman.sh
+      - run: docker build --file Containerfile --tag hafthi:ci .
+      - run: docker run --rm --entrypoint /bin/sh hafthi:ci -c 'ldd /usr/local/bin/hafthi | tee /tmp/ldd && ! grep -q "not found" /tmp/ldd'
