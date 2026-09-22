@@ -526,6 +526,14 @@ impl GpuState {
         self.text_buffer.shape_until_scroll(&mut self.font_system);
     }
 
+    fn glyph_x(&self, row: usize, col: usize, after: bool) -> f32 {
+        self.text_buffer.layout_runs()
+            .find(|run| run.line_i == row)
+            .and_then(|run| run.glyphs.get(col))
+            .map(|glyph| glyph.x + if after { glyph.w } else { 0.0 })
+            .unwrap_or((col + usize::from(after)) as f32 * self.settings.cell_width)
+    }
+
     fn render(
         &mut self,
         terminal: &TerminalGrid,
@@ -848,10 +856,11 @@ impl GpuState {
                 let start_col = if row == a.1 { a.0 } else { 0 };
                 let end_col = if row == b.1 { b.0 } else { terminal.dimensions().0.saturating_sub(1) };
 
-                let x = self.settings.padding + start_col as f32 * self.settings.cell_width;
+                let start_x = self.glyph_x(row, start_col, false);
+                let end_x = self.glyph_x(row, end_col, true);
+                let x = self.settings.padding + start_x;
                 let y = terminal_top(&self.settings) + row as f32 * self.settings.line_height;
-                let width =
-                    (end_col.saturating_sub(start_col) + 1) as f32 * self.settings.cell_width;
+                let width = (end_x - start_x).max(1.0);
 
                 RectRenderer::push_rect(
                     &mut rect_vertices,
@@ -1275,16 +1284,41 @@ fn mouse_to_cell(
     position: winit::dpi::PhysicalPosition<f64>,
     terminal: &TerminalGrid,
     settings: &Settings,
+    text_buffer: &Buffer,
 ) -> (usize, usize) {
     let (cols, rows) = terminal.dimensions();
-    let x =
-        (((position.x as f32) - settings.padding).max(0.0) / settings.cell_width).floor() as usize;
+    let local_x = ((position.x as f32) - settings.padding).max(0.0);
     let y =
         (((position.y as f32) - terminal_top(settings)).max(0.0) / settings.line_height).floor() as usize;
+    let x = text_buffer.layout_runs()
+        .find(|run| run.line_i == y)
+        .map(|run| column_at_x(local_x, run.glyphs.iter().map(|glyph| (glyph.x, glyph.w))))
+        .unwrap_or((local_x / settings.cell_width).floor() as usize);
     (
         x.min(cols.saturating_sub(1)),
         y.min(rows.saturating_sub(1)),
     )
+}
+
+fn column_at_x(x: f32, glyphs: impl Iterator<Item = (f32, f32)>) -> usize {
+    let mut last = 0;
+    for (index, (left, width)) in glyphs.enumerate() {
+        if x < left + width { return index; }
+        last = index;
+    }
+    last
+}
+
+#[cfg(test)]
+mod selection_geometry_tests {
+    use super::column_at_x;
+
+    #[test]
+    fn mouse_column_follows_rendered_glyphs_instead_of_estimated_width() {
+        let glyphs = [(0.0, 16.0), (16.0, 16.0), (32.0, 24.0), (56.0, 24.0)];
+        assert_eq!(column_at_x(48.0, glyphs.into_iter()), 2);
+        assert_eq!(column_at_x(60.0, glyphs.into_iter()), 3);
+    }
 }
 
 fn send_key(pty: &PtySession, key: &Key, text: Option<&str>, modifiers: ModifiersState) {
@@ -1835,7 +1869,7 @@ fn run() -> Result<()> {
                         }
                     } else if selecting {
                         if let Some((start, _)) = selection {
-                            selection = Some((start, mouse_to_cell(position, &terminal, &settings)));
+                            selection = Some((start, mouse_to_cell(position, &terminal, &settings, &gpu.text_buffer)));
                             dirty = true;
                             window.request_redraw();
                         }
@@ -2188,7 +2222,7 @@ fn run() -> Result<()> {
                     } else {
                         match state {
                             ElementState::Pressed => {
-                                let cell = mouse_to_cell(mouse_pos, &terminal, &settings);
+                                let cell = mouse_to_cell(mouse_pos, &terminal, &settings, &gpu.text_buffer);
                                 selection = Some((cell, cell));
                                 selecting = true;
                             }
