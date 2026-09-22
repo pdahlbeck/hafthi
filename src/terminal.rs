@@ -544,12 +544,34 @@ impl Perform for TerminalGrid {
                 self.cursor_x = col.saturating_sub(1).min(self.cols.saturating_sub(1));
             }
             'J' => {
+                // CSI J defaults to 0: erase from the cursor onward.
+                // Shells use this while repainting a prompt; clearing the
+                // entire screen here loses command output above the cursor.
+                let mode = params
+                    .iter()
+                    .next()
+                    .and_then(|p| p.first())
+                    .copied()
+                    .unwrap_or(0);
+                let cursor = self.cursor_y * self.cols + self.cursor_x;
                 let blank = self.blank_cell();
-                for cell in &mut self.cells {
-                    *cell = blank;
+                match mode {
+                    0 => {
+                        let start = cursor.min(self.cells.len());
+                        for cell in &mut self.cells[start..] {
+                            *cell = blank;
+                        }
+                    }
+                    1 => {
+                        let end = cursor.saturating_add(1).min(self.cells.len());
+                        for cell in &mut self.cells[..end] {
+                            *cell = blank;
+                        }
+                    }
+                    2 => self.cells.fill(blank),
+                    3 => self.history.clear(),
+                    _ => {}
                 }
-                self.cursor_x = 0;
-                self.cursor_y = 0;
             }
             'K' => self.erase_line_from_cursor(),
             _ => return,
@@ -562,6 +584,31 @@ impl Perform for TerminalGrid {
 #[cfg(test)]
 mod foreground_tests {
     use super::*;
+
+    #[test]
+    fn partial_screen_erase_preserves_previous_command_output() {
+        let fg = Rgb::new(245, 245, 245);
+        let mut grid = TerminalGrid::new_with_theme(12, 4, fg, [fg; 16], 100);
+        grid.feed(b"old output\r\nnew prompt\x1b[J");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "old output  ");
+        assert_eq!(grid.current_row(1).iter().map(|cell| cell.ch).collect::<String>(), "new prompt  ");
+        assert_eq!(grid.cursor(), (10, 1));
+    }
+
+    #[test]
+    fn screen_erase_modes_keep_cursor_and_erase_only_requested_cells() {
+        let fg = Rgb::new(245, 245, 245);
+        let mut grid = TerminalGrid::new_with_theme(5, 2, fg, [fg; 16], 100);
+        grid.feed(b"abcde\r\nfghij\x1b[2;3H\x1b[0J");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "abcde");
+        assert_eq!(grid.current_row(1).iter().map(|cell| cell.ch).collect::<String>(), "fg   ");
+        assert_eq!(grid.cursor(), (2, 1));
+        grid.feed(b"\x1b[1J");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "     ");
+        grid.feed(b"\x1b[2J");
+        assert!(grid.cells.iter().all(|cell| cell.ch == ' '));
+        assert_eq!(grid.cursor(), (2, 1));
+    }
 
     #[test]
     fn changing_default_color_keeps_explicit_ansi_colors() {
