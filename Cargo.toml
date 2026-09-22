@@ -1,6 +1,6 @@
 [package]
 name = "hafthi"
-version = "0.7.18"
+version = "0.7.19"
 edition = "2021"
 description = "GPU-accelerated Wayland terminal emulator in Rust/wgpu"
 license = "MIT"
