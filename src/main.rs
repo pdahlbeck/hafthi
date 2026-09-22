@@ -856,12 +856,12 @@ impl GpuState {
 
         if prefs.visible {
             let scale = prefs.scale;
-            // Dim the terminal and draw a solid window with the sidebar and
-            // subtle blue accents from the reference design.
+            // Dim the terminal and draw the preferences with opaque, dark
+            // surfaces independent of the terminal background opacity.
             RectRenderer::push_rect(
                 &mut rect_vertices, self.config.width, self.config.height,
                 0.0, 0.0, self.config.width as f32, self.config.height as f32,
-                [0.02, 0.03, 0.04, 0.44],
+                [0.02, 0.03, 0.04, 0.55],
             );
             RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
@@ -869,14 +869,14 @@ impl GpuState {
                 self.config.height,
                 prefs.x - 2.0 * scale, prefs.y - 2.0 * scale,
                 prefs.width + 4.0 * scale, prefs.height() + 4.0 * scale,
-                10.0 * scale, [0.35, 0.39, 0.42, 0.90],
+                10.0 * scale, [0.12, 0.14, 0.16, 1.0],
             );
             RectRenderer::push_rounded_rect(
                 &mut rect_vertices,
                 self.config.width,
                 self.config.height,
                 prefs.x, prefs.y, prefs.width, prefs.height(),
-                8.0 * scale, [0.16, 0.18, 0.19, 1.0],
+                8.0 * scale, [0.045, 0.052, 0.060, 1.0],
             );
             let mut shape = |x: f32, y: f32, w: f32, h: f32, radius: f32, color| {
                 let (x, y) = prefs.pos(x, y);
@@ -886,19 +886,19 @@ impl GpuState {
                 );
             };
             shape(0.0, 0.0, PreferencesPanel::SIDEBAR_WIDTH, 476.0, 8.0,
-                [0.115, 0.13, 0.14, 1.0]);
-            shape(8.0, 0.0, 184.0, 476.0, 0.0, [0.115, 0.13, 0.14, 1.0]);
-            shape(191.0, 0.0, 1.0, 476.0, 0.0, [0.33, 0.36, 0.38, 1.0]);
-            shape(0.0, 67.0, 736.0, 1.0, 0.0, [0.32, 0.35, 0.37, 1.0]);
-            shape(207.0, 416.0, 514.0, 1.0, 0.0, [0.29, 0.32, 0.34, 1.0]);
+                [0.027, 0.033, 0.040, 1.0]);
+            shape(8.0, 0.0, 184.0, 476.0, 0.0, [0.027, 0.033, 0.040, 1.0]);
+            shape(191.0, 0.0, 1.0, 476.0, 0.0, [0.12, 0.14, 0.16, 1.0]);
+            shape(0.0, 67.0, 736.0, 1.0, 0.0, [0.12, 0.14, 0.16, 1.0]);
+            shape(207.0, 416.0, 514.0, 1.0, 0.0, [0.10, 0.12, 0.14, 1.0]);
             for page in PrefPage::ALL {
                 let index = PrefPage::ALL.iter().position(|item| *item == page).unwrap() as f32;
                 let row_y = 83.0 + index * 43.0;
                 if prefs.page == page || prefs.hovered_page == Some(page) {
                     let color = if prefs.page == page {
-                        [0.15, 0.27, 0.34, 1.0]
+                        [0.035, 0.10, 0.16, 1.0]
                     } else {
-                        [0.20, 0.23, 0.25, 1.0]
+                        [0.08, 0.095, 0.11, 1.0]
                     };
                     shape(9.0, row_y, 174.0, 37.0, 4.0, color);
                     if prefs.page == page {
@@ -914,16 +914,16 @@ impl GpuState {
                     shape(25.0, y + 3.0, 6.0, 2.0, 0.0, [0.12, 0.16, 0.19, 1.0]);
                 }
             }
-            let card = [0.135, 0.155, 0.17, 1.0];
-            let card_border = [0.32, 0.36, 0.39, 1.0];
+            let card = [0.055, 0.064, 0.075, 1.0];
+            let card_border = [0.12, 0.14, 0.16, 1.0];
             match prefs.page {
                 PrefPage::Appearance => {
                     shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
                     shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
-                    shape(226.0, 175.0, 476.0, 1.0, 0.0, [0.28, 0.32, 0.34, 1.0]);
-                    shape(226.0, 273.0, 476.0, 1.0, 0.0, [0.28, 0.32, 0.34, 1.0]);
+                    shape(226.0, 175.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
+                    shape(226.0, 273.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
                     let progress = self.settings.opacity.clamp(0.0, 1.0) as f32;
-                    shape(226.0, 235.0, 452.0, 5.0, 2.5, [0.28, 0.32, 0.35, 1.0]);
+                    shape(226.0, 235.0, 452.0, 5.0, 2.5, [0.16, 0.19, 0.22, 1.0]);
                     shape(226.0, 235.0, (452.0 * progress).max(2.0), 5.0, 2.5,
                         [0.32, 0.65, 0.86, 1.0]);
                     shape(226.0 + 452.0 * progress - 7.0, 230.0, 15.0, 15.0, 7.5,
@@ -952,17 +952,17 @@ impl GpuState {
                 let active = button.action == selected || button.action == PrefAction::Save;
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
-                    if hover { [0.28, 0.59, 0.79, 1.0] }
-                    else { [0.20, 0.47, 0.66, 1.0] }
-                } else if hover { [0.29, 0.33, 0.36, 1.0] }
-                else { [0.21, 0.24, 0.27, 1.0] };
+                    if hover { [0.12, 0.41, 0.63, 1.0] }
+                    else { [0.07, 0.30, 0.49, 1.0] }
+                } else if hover { [0.12, 0.14, 0.17, 1.0] }
+                else { [0.08, 0.095, 0.11, 1.0] };
                 let bx = (button.x - prefs.x) / scale;
                 let by = (button.y - prefs.y) / scale;
                 let bw = button.w / scale;
                 let bh = button.h / scale;
                 shape(bx - 1.0, by - 1.0, bw + 2.0, bh + 2.0, 5.0,
-                    if active { [0.40, 0.68, 0.86, 1.0] }
-                    else { [0.35, 0.39, 0.42, 1.0] },
+                    if active { [0.12, 0.43, 0.66, 1.0] }
+                    else { [0.14, 0.16, 0.18, 1.0] },
                 );
                 shape(bx, by, bw, bh, 4.0, color);
             }
