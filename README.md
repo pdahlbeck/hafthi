@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.11:** enables the native Wayland clipboard for Copy and Paste and records clipboard errors in the local diagnostic log. Linux/Wayland is the only supported platform.
+> **Version 0.7.12:** gives Preferences fully opaque dark surfaces for clearer contrast over a transparent terminal. Linux/Wayland is the only supported platform.
 
 ## Current stack
 
