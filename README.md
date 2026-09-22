@@ -56,6 +56,20 @@ Open **Preferences → Command help** (or press **Ctrl+Shift+H**) and turn the f
 - keyboard navigation and accessibility for Preferences
 - performance profiling and long-session testing
 
+## Run in Podman (Wayland)
+
+On Pop!_OS 24.04/COSMIC or another Wayland desktop, install Podman and run this from the cloned repository as your normal desktop user:
+
+```bash
+sudo apt install podman
+cd ~/hafthi
+bash run-podman.sh
+```
+
+The first launch builds a local image from `Containerfile`; subsequent launches reuse it. After pulling new commits, rebuild it with `bash run-podman.sh --build`. Rust/Cargo are installed only in the build stage of the image, so the host does not need them. An Intel GPU is sufficient if it has working Mesa/Vulkan drivers. This needs a **Wayland** login session, a local rootless Podman installation with `crun`, and access to `/dev/dri`.
+
+The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. The optional tgpt command help requires tgpt to be installed **inside the image**; it is not bundled.
+
 ## Install
 
 ```bash
