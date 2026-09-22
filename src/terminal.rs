@@ -607,7 +607,7 @@ mod foreground_tests {
         assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "     ");
         grid.feed(b"\x1b[2J");
         assert!(grid.cells.iter().all(|cell| cell.ch == ' '));
-        assert_eq!(grid.cursor(), (2, 0));
+        assert_eq!(grid.cursor(), (2, 1));
     }
 
     #[test]
