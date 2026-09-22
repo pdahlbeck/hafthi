@@ -1363,9 +1363,31 @@ fn main() -> Result<()> {
     result
 }
 
+fn response_locale(lc_all: Option<&str>, language: Option<&str>, lc_messages: Option<&str>, lang: Option<&str>) -> String {
+    let selected = [lc_all, language, lc_messages, lang]
+        .into_iter().flatten().find(|value| !value.is_empty()).unwrap_or("en");
+    let code = selected.split(':').next().unwrap_or("en")
+        .split('.').next().unwrap_or("en");
+    if code == "C" || code == "POSIX" { return "en".into(); }
+    if code.is_empty() || code.len() > 24
+        || !code.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return "en".into();
+    }
+    code.to_string()
+}
+
+fn system_response_locale() -> String {
+    let lc_all = std::env::var("LC_ALL").ok();
+    let language = std::env::var("LANGUAGE").ok();
+    let lc_messages = std::env::var("LC_MESSAGES").ok();
+    let lang = std::env::var("LANG").ok();
+    response_locale(lc_all.as_deref(), language.as_deref(), lc_messages.as_deref(), lang.as_deref())
+}
+
 fn tgpt_query_command(question: &str) -> String {
+    let locale = system_response_locale();
     let prompt = format!(
-        "Answer only questions about Linux terminal commands. Reply in Swedish with a short explanation, a command example and what it does. If unrelated to Linux commands, say you only help with Linux commands. Never suggest running a command automatically. Question: {question}"
+        "Answer only questions about Linux terminal commands. Respond in the language of the user's Linux locale ({locale}), with a short explanation, a command example and what it does. If unrelated to Linux commands, say you only help with Linux commands. Never suggest running a command automatically. Question: {question}"
     );
     let quoted = prompt.replace('\'', "'\\''");
     format!("if command -v tgpt >/dev/null 2>&1; then tgpt --provider pollinations --quiet --whole '{quoted}'; else printf 'tgpt is not installed. Install it with: sudo pacman -S tgpt\\n'; fi\n")
@@ -1387,7 +1409,7 @@ fn append_question_text(input: &mut String, key: &Key) {
 
 #[cfg(test)]
 mod command_help_tests {
-    use super::{append_question_text, tgpt_query_command};
+    use super::{append_question_text, response_locale, tgpt_query_command};
     use winit::keyboard::{Key, NamedKey};
 
     #[test]
@@ -1404,6 +1426,14 @@ mod command_help_tests {
         assert!(command.contains("what'\\''s `touch /tmp/hafthi-test`?; echo unsafe'"));
         assert!(command.contains("--provider pollinations --quiet --whole"));
         assert!(!command.contains(" --shell "));
+    }
+
+    #[test]
+    fn response_language_follows_linux_locale_precedence() {
+        assert_eq!(response_locale(None, None, None, Some("sv_SE.UTF-8")), "sv_SE");
+        assert_eq!(response_locale(None, Some("de:en"), Some("sv_SE"), None), "de");
+        assert_eq!(response_locale(Some("fr_FR.UTF-8"), Some("de"), None, None), "fr_FR");
+        assert_eq!(response_locale(None, None, None, Some("C.UTF-8")), "en");
     }
 }
 
@@ -1739,6 +1769,7 @@ fn run() -> Result<()> {
                         return;
                     }
                     selecting = false;
+                    context_menu.set_command_help_enabled(settings.command_help_enabled);
                     context_menu.open(
                         mouse_pos.x as f32,
                         mouse_pos.y as f32,
@@ -2044,6 +2075,12 @@ fn run() -> Result<()> {
                                         gpu.config.height,
                                         settings.scale_factor,
                                     );
+                                }
+                                Some(MenuAction::AskTgpt) => {
+                                    preferences_backup = Some(settings.clone());
+                                    preferences.open(gpu.config.width, gpu.config.height, settings.scale_factor);
+                                    preferences.page = PrefPage::CommandHelp;
+                                    preferences.question_editing = true;
                                 }
                                 Some(MenuAction::EditConfig) => {
                                     let path = config_path();

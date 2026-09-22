@@ -8,6 +8,7 @@ pub enum MenuAction {
     DecreaseFont,
     ResetFont,
     ClearScrollback,
+    AskTgpt,
     Preferences,
     EditConfig,
     Quit,
@@ -54,6 +55,19 @@ impl ContextMenu {
                 MenuEntry { icon: "✎", label: "Edit Hafþi Config", shortcut: "", action: MenuAction::EditConfig, separator_after: true },
                 MenuEntry { icon: "×", label: "Quit", shortcut: "", action: MenuAction::Quit, separator_after: false },
             ],
+        }
+    }
+
+    pub fn set_command_help_enabled(&mut self, enabled: bool) {
+        self.entries.retain(|entry| entry.action != MenuAction::AskTgpt);
+        if enabled {
+            let position = self.entries.iter()
+                .position(|entry| entry.action == MenuAction::Preferences)
+                .expect("Preferences menu entry");
+            self.entries.insert(position, MenuEntry {
+                icon: "?", label: "Ask tgpt…", shortcut: "Ctrl+Shift+H",
+                action: MenuAction::AskTgpt, separator_after: true,
+            });
         }
     }
 
@@ -137,5 +151,21 @@ impl ContextMenu {
             .map(|entry| entry.icon)
             .collect::<Vec<_>>()
             .join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContextMenu, MenuAction};
+
+    #[test]
+    fn assistant_only_appears_when_enabled() {
+        let mut menu = ContextMenu::new();
+        assert!(!menu.entries.iter().any(|entry| entry.action == MenuAction::AskTgpt));
+        menu.set_command_help_enabled(true);
+        menu.set_command_help_enabled(true);
+        assert_eq!(menu.entries.iter().filter(|entry| entry.action == MenuAction::AskTgpt).count(), 1);
+        menu.set_command_help_enabled(false);
+        assert!(!menu.entries.iter().any(|entry| entry.action == MenuAction::AskTgpt));
     }
 }
