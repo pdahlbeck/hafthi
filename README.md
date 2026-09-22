@@ -4,7 +4,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.17:** keeps the long tgpt prompt inside Hafþi so only a short question command appears in the terminal. Linux/Wayland is the only supported platform.
+> **Version 0.7.18:** prevents terminal text from drawing over the right-click menu. Linux/Wayland is the only supported platform.
 
 ### Optional Linux command help
 
