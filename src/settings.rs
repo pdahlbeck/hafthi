@@ -72,18 +72,22 @@ impl Default for Settings {
 }
 
 fn parse_hex(value: &str, fallback: Rgb) -> Rgb {
+    parse_hex_color(value).unwrap_or(fallback)
+}
+
+pub fn parse_hex_color(value: &str) -> Option<Rgb> {
     let s = value.trim().trim_start_matches('#');
     if s.len() != 6 {
-        return fallback;
+        return None;
     }
     let Ok(v) = u32::from_str_radix(s, 16) else {
-        return fallback;
+        return None;
     };
-    Rgb::new(
+    Some(Rgb::new(
         ((v >> 16) & 0xff) as u8,
         ((v >> 8) & 0xff) as u8,
         (v & 0xff) as u8,
-    )
+    ))
 }
 
 pub fn config_path() -> PathBuf {
@@ -289,6 +293,9 @@ impl Settings {
         set_key(&mut text, "general", "opacity", &format!("{:.2}", self.opacity));
         set_key(&mut text, "general", "padding", &format!("{:.0}", self.logical_padding()));
         set_key(&mut text, "general", "scrollback", &self.scrollback.to_string());
+        set_key(&mut text, "colors", "foreground", &format!(
+            "#{:02x}{:02x}{:02x}", self.foreground.r, self.foreground.g, self.foreground.b
+        ));
 
         set_key(
             &mut text,
