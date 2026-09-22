@@ -1224,6 +1224,45 @@ fn send_key(pty: &PtySession, key: &Key, text: Option<&str>, modifiers: Modifier
     }
 }
 
+fn copy_selection_to_clipboard(
+    terminal: &TerminalGrid,
+    selection: Option<((usize, usize), (usize, usize))>,
+    clipboard: Option<&mut Clipboard>,
+    recent_copy: &mut Option<String>,
+) {
+    let Some((start, end)) = selection else {
+        diagnostics::record("clipboard copy requested without a selection");
+        return;
+    };
+    let text = terminal.selected_text(start, end);
+    if text.is_empty() {
+        diagnostics::record("clipboard copy selection is empty");
+        return;
+    }
+    *recent_copy = Some(text.clone());
+    match clipboard {
+        Some(clipboard) => {
+            if let Err(err) = clipboard.set_text(text) {
+                diagnostics::record(&format!("clipboard copy failed: {err}"));
+            }
+        }
+        None => diagnostics::record("clipboard unavailable while copying"),
+    }
+}
+
+fn clipboard_text(clipboard: Option<&mut Clipboard>, recent_copy: &Option<String>) -> Option<String> {
+    match clipboard {
+        Some(clipboard) => match clipboard.get_text() {
+            Ok(text) => Some(text),
+            Err(err) => {
+                diagnostics::record(&format!("clipboard paste failed: {err}"));
+                recent_copy.clone()
+            }
+        },
+        None => recent_copy.clone(),
+    }
+}
+
 fn request_hyprland_no_blur() {
     if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
         return;
@@ -1319,7 +1358,14 @@ fn run() -> Result<()> {
     let mut selecting = false;
     let mut opacity_dragging = false;
     let mut mouse_pos = winit::dpi::PhysicalPosition::new(0.0, 0.0);
-    let mut clipboard = Clipboard::new().ok();
+    let mut clipboard = match Clipboard::new() {
+        Ok(clipboard) => Some(clipboard),
+        Err(err) => {
+            diagnostics::record(&format!("clipboard unavailable: {err}"));
+            None
+        }
+    };
+    let mut recent_copy: Option<String> = None;
     let mut context_menu = ContextMenu::new();
     let mut preferences = PreferencesPanel::new();
     let mut preferences_backup: Option<Settings> = None;
@@ -1434,27 +1480,19 @@ fn run() -> Result<()> {
                         if ctrl_shift {
                             match &event.logical_key {
                                 Key::Character(ch) if ch.eq_ignore_ascii_case("c") => {
-                                    if let (Some(selection), Some(clipboard)) =
-                                        (selection, clipboard.as_mut())
-                                    {
-                                        let text =
-                                            terminal.selected_text(selection.0, selection.1);
-                                        if !text.is_empty() {
-                                            let _ = clipboard.set_text(text);
-                                        }
-                                    }
+                                    copy_selection_to_clipboard(
+                                        &terminal, selection, clipboard.as_mut(), &mut recent_copy,
+                                    );
                                     return;
                                 }
                                 Key::Character(ch) if ch.eq_ignore_ascii_case("v") => {
-                                    if let Some(clipboard) = clipboard.as_mut() {
-                                        if let Ok(text) = clipboard.get_text() {
-                                            terminal.scroll_to_bottom();
-                                            pty.write(text.as_bytes());
-                                            selection = None;
-                                            gpu.update_terminal_text(&terminal);
-                                            dirty = true;
-                                            window.request_redraw();
-                                        }
+                                    if let Some(text) = clipboard_text(clipboard.as_mut(), &recent_copy) {
+                                        terminal.scroll_to_bottom();
+                                        pty.write(text.as_bytes());
+                                        selection = None;
+                                        gpu.update_terminal_text(&terminal);
+                                        dirty = true;
+                                        window.request_redraw();
                                     }
                                     return;
                                 }
@@ -1667,23 +1705,15 @@ fn run() -> Result<()> {
 
                             match action {
                                 Some(MenuAction::Copy) => {
-                                    if let (Some(selection_range), Some(clipboard)) =
-                                        (selection, clipboard.as_mut())
-                                    {
-                                        let text = terminal
-                                            .selected_text(selection_range.0, selection_range.1);
-                                        if !text.is_empty() {
-                                            let _ = clipboard.set_text(text);
-                                        }
-                                    }
+                                    copy_selection_to_clipboard(
+                                        &terminal, selection, clipboard.as_mut(), &mut recent_copy,
+                                    );
                                 }
                                 Some(MenuAction::Paste) => {
-                                    if let Some(clipboard) = clipboard.as_mut() {
-                                        if let Ok(text) = clipboard.get_text() {
-                                            terminal.scroll_to_bottom();
-                                            pty.write(text.as_bytes());
-                                            selection = None;
-                                        }
+                                    if let Some(text) = clipboard_text(clipboard.as_mut(), &recent_copy) {
+                                        terminal.scroll_to_bottom();
+                                        pty.write(text.as_bytes());
+                                        selection = None;
                                     }
                                 }
                                 Some(MenuAction::SelectAll) => {

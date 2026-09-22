@@ -1,6 +1,6 @@
 [package]
 name = "hafthi"
-version = "0.7.10"
+version = "0.7.11"
 edition = "2021"
 description = "GPU-accelerated Wayland terminal emulator in Rust/wgpu"
 license = "MIT"
@@ -13,7 +13,7 @@ wgpu = "0.19"
 winit = "0.29"
 glyphon = "0.5"
 portable-pty = "0.8"
-arboard = "3"
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 bytemuck = { version = "1", features = ["derive"] }
 rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
