@@ -660,6 +660,22 @@ impl GpuState {
                     add("Scrollback lines", 226.0, 357.0, 200.0, 15.0, primary);
                     add(&self.settings.scrollback.to_string(), 530.0, 358.0, 90.0, 13.0, muted);
                 }
+                PrefPage::Shell => {
+                    add("FISH", 226.0, 91.0, 180.0, 11.0, accent);
+                    add("Use Fish when installed", 226.0, 132.0, 360.0, 15.0, primary);
+                    add(if pty::installed_program("fish").is_some() { "Fish detected" } else { "Fish not installed; using your login shell" },
+                        226.0, 160.0, 475.0, 12.0, muted);
+                    add("FISH WELCOME MESSAGE", 226.0, 190.0, 350.0, 11.0, accent);
+                    add("Show greeting in Hafþi", 226.0, 228.0, 360.0, 15.0, primary);
+                    add("Hidden by default; your Fish config stays untouched.",
+                        226.0, 256.0, 470.0, 12.0, muted);
+                    add("STARSHIP PROMPT", 226.0, 286.0, 300.0, 11.0, accent);
+                    add("Use Starship when installed", 226.0, 325.0, 380.0, 15.0, primary);
+                    add(if pty::installed_program("starship").is_some() { "Starship detected" } else { "Starship not installed" },
+                        226.0, 353.0, 470.0, 12.0, muted);
+                    add("Shell changes take effect after restarting Hafþi.",
+                        226.0, 379.0, 470.0, 11.0, muted);
+                }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
                     add("Image / GIF", 226.0, 189.0, 260.0, 15.0, primary);
@@ -717,6 +733,9 @@ impl GpuState {
                     PrefAction::ChooseImage => "Choose…",
                     PrefAction::ClearImage => "Clear",
                     PrefAction::ToggleCommandHelp => if self.settings.command_help_enabled { "On" } else { "Off" },
+                    PrefAction::ToggleFish => if self.settings.use_fish { "On" } else { "Off" },
+                    PrefAction::ToggleFishGreeting => if self.settings.show_fish_greeting { "On" } else { "Off" },
+                    PrefAction::ToggleStarship => if self.settings.use_starship { "On" } else { "Off" },
                     PrefAction::AskQuestion => "Ask tgpt",
                     PrefAction::InstallTgpt => "Install tgpt",
                     PrefAction::Cancel => "Cancel",
@@ -994,6 +1013,12 @@ impl GpuState {
                         shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                     }
                 }
+                PrefPage::Shell => {
+                    shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
+                    shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
+                    shape(226.0, 183.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
+                    shape(226.0, 280.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
+                }
                 PrefPage::CommandHelp => {
                     for (y, h) in [(78.0, 100.0), (191.0, 144.0), (341.0, 56.0)] {
                         shape(208.0, y, 512.0, h, 5.0, card_border);
@@ -1027,7 +1052,10 @@ impl GpuState {
                     continue;
                 }
                 let active = button.action == selected || button.action == PrefAction::Save
-                    || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled);
+                    || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled)
+                    || (button.action == PrefAction::ToggleFish && self.settings.use_fish)
+                    || (button.action == PrefAction::ToggleFishGreeting && self.settings.show_fish_greeting)
+                    || (button.action == PrefAction::ToggleStarship && self.settings.use_starship);
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
                     if hover { [0.12, 0.41, 0.63, 1.0] }
@@ -1597,7 +1625,7 @@ fn run() -> Result<()> {
         settings.ansi,
         settings.scrollback,
     );
-    let pty = PtySession::spawn(cols, rows, proxy.clone())?;
+    let pty = PtySession::spawn(cols, rows, proxy.clone(), &settings)?;
 
     let mut selection: Option<((usize, usize), (usize, usize))> = None;
     let mut selecting = false;
@@ -1915,6 +1943,13 @@ fn run() -> Result<()> {
                                 Some(PrefAction::ToggleCommandHelp) => {
                                     settings.command_help_enabled = !settings.command_help_enabled;
                                     gpu.apply_settings(settings.clone());
+                                }
+                                Some(PrefAction::ToggleFish) => settings.use_fish = !settings.use_fish,
+                                Some(PrefAction::ToggleFishGreeting) => {
+                                    settings.show_fish_greeting = !settings.show_fish_greeting;
+                                }
+                                Some(PrefAction::ToggleStarship) => {
+                                    settings.use_starship = !settings.use_starship;
                                 }
                                 Some(PrefAction::EditQuestion) => {
                                     preferences.question_editing = true;

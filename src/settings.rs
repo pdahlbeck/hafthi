@@ -16,6 +16,9 @@ pub struct Settings {
     pub window_height: u32,
     pub scrollback: usize,
     pub command_help_enabled: bool,
+    pub use_fish: bool,
+    pub show_fish_greeting: bool,
+    pub use_starship: bool,
     pub foreground: Rgb,
     pub background: Rgb,
     pub cursor: Rgb,
@@ -43,6 +46,9 @@ impl Default for Settings {
             window_height: 640,
             scrollback: 15_000,
             command_help_enabled: false,
+            use_fish: true,
+            show_fish_greeting: false,
+            use_starship: true,
             foreground: Rgb::new(0, 0, 0),
             background: Rgb::new(246, 244, 241),
             cursor: Rgb::new(0, 0, 0),
@@ -173,9 +179,11 @@ impl Settings {
         if let Some(v) = get("general", "scrollback").and_then(|v| v.parse::<usize>().ok()) {
             out.scrollback = v.max(100);
         }
-        if let Some(v) = get("command_help", "enabled") {
-            out.command_help_enabled = matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on");
-        }
+        let enabled = |value: &str| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on");
+        if let Some(v) = get("command_help", "enabled") { out.command_help_enabled = enabled(v); }
+        if let Some(v) = get("shell", "use_fish") { out.use_fish = enabled(v); }
+        if let Some(v) = get("shell", "show_fish_greeting") { out.show_fish_greeting = enabled(v); }
+        if let Some(v) = get("shell", "use_starship") { out.use_starship = enabled(v); }
         if let Some(v) = get("gpu", "font_scale").and_then(|v| v.parse::<f32>().ok()) {
             out.gpu_font_scale = v.clamp(0.75, 3.0);
         }
@@ -300,6 +308,10 @@ impl Settings {
         set_key(&mut text, "general", "scrollback", &self.scrollback.to_string());
         set_key(&mut text, "command_help", "enabled",
             if self.command_help_enabled { "true" } else { "false" });
+        set_key(&mut text, "shell", "use_fish", if self.use_fish { "true" } else { "false" });
+        set_key(&mut text, "shell", "show_fish_greeting",
+            if self.show_fish_greeting { "true" } else { "false" });
+        set_key(&mut text, "shell", "use_starship", if self.use_starship { "true" } else { "false" });
         set_key(&mut text, "colors", "foreground", &format!(
             "#{:02x}{:02x}{:02x}", self.foreground.r, self.foreground.g, self.foreground.b
         ));

@@ -7,7 +7,19 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.20:** removes unused preferences and theme constants reported during installation. Linux/Wayland is the only supported platform.
+> **Version 0.7.21:** optional Fish and Starship integration with a dedicated **Shell & prompt** page in Preferences. Linux/Wayland is the only supported platform.
+
+### Optional Fish and Starship
+
+Open **Preferences → Shell & prompt** to see whether [Fish](https://fishshell.com/) and [Starship](https://starship.rs/) are installed. On Arch Linux, install either or both yourself:
+
+```bash
+sudo pacman -S --needed fish starship
+```
+
+On other distributions, use your package manager. With **Use Fish when installed** enabled (the default), Hafþi launches Fish if it finds an executable; otherwise it opens your account's normal login shell. The Fish welcome message is hidden by default inside Hafþi and can be shown with **Show greeting in Hafþi**. This does not change `config.fish` or another terminal.
+
+When Fish and Starship are both installed, Hafþi initializes Starship in Fish by default. If your Fish configuration already initializes Starship, Hafþi does not initialize it again. You can turn off Hafþi's automatic initialization in Preferences; your own `config.fish` still takes effect. Changes to these shell options take effect when you restart Hafþi. Neither Fish nor Starship is bundled with Hafþi. If you use another shell, follow [Starship's setup instructions](https://starship.rs/guide/) for that shell.
 
 ### Optional Linux command help
 
@@ -28,6 +40,7 @@ Open **Preferences → Command help** (or press **Ctrl+Shift+H**) and turn the f
 
 - GPU-rendered terminal text
 - real PTY shell operation
+- optional Fish shell, Fish greeting control and Starship prompt
 - ANSI 16-color, 256-color and truecolor support
 - bold text
 - GPU cursor and selection
@@ -111,7 +124,7 @@ bash run-podman.sh
 
 The first launch builds a local image from `Containerfile`; subsequent launches reuse it. After pulling new commits, rebuild it with `bash run-podman.sh --build`. Rust/Cargo are installed only in the build stage of the image, so the host does not need them. An Intel GPU is sufficient if it has working Mesa/Vulkan drivers. This needs a **Wayland** login session, a local rootless Podman installation with `crun`, and access to `/dev/dri`.
 
-The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. The optional tgpt command help requires tgpt to be installed **inside the image**; it is not bundled.
+The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. Optional Fish, Starship and tgpt installations must also be made **inside the image** to work in Podman; they are not bundled.
 
 ## Configuration
 
@@ -121,7 +134,7 @@ Hafþi uses:
 ~/.config/hafthi/config.ini
 ```
 
-The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback and branding settings.
+The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback, branding and shell options. Preferences saves the shell options under `[shell]` as `use_fish`, `show_fish_greeting` and `use_starship`.
 
 ## Transparency on Hyprland
 
