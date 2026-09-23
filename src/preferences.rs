@@ -2,17 +2,19 @@
 pub enum PrefPage {
     Appearance,
     Terminal,
+    Shell,
     Background,
     CommandHelp,
 }
 
 impl PrefPage {
-    pub const ALL: [Self; 4] = [Self::Appearance, Self::Terminal, Self::Background, Self::CommandHelp];
+    pub const ALL: [Self; 5] = [Self::Appearance, Self::Terminal, Self::Shell, Self::Background, Self::CommandHelp];
 
     pub fn title(self) -> &'static str {
         match self {
             Self::Appearance => "Appearance",
             Self::Terminal => "Terminal",
+            Self::Shell => "Shell & prompt",
             Self::Background => "Background",
             Self::CommandHelp => "Command help",
         }
@@ -34,6 +36,9 @@ pub enum PrefAction {
     TextColor(u8),
     EditTextColor,
     ToggleCommandHelp,
+    ToggleFish,
+    ToggleFishGreeting,
+    ToggleStarship,
     EditQuestion,
     AskQuestion,
     InstallTgpt,
@@ -188,6 +193,11 @@ impl PreferencesPanel {
                 add(526.0, 278.0, 178.0, 31.0, EditTextColor);
                 add(626.0, 351.0, 35.0, 34.0, ScrollbackDown);
                 add(669.0, 351.0, 35.0, 34.0, ScrollbackUp);
+            }
+            PrefPage::Shell => {
+                add(620.0, 125.0, 84.0, 34.0, ToggleFish);
+                add(620.0, 221.0, 84.0, 34.0, ToggleFishGreeting);
+                add(620.0, 318.0, 84.0, 34.0, ToggleStarship);
             }
             PrefPage::Background => {
                 add(226.0, 126.0, 106.0, 35.0, ImageOff);
