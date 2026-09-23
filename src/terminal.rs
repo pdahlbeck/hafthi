@@ -590,7 +590,7 @@ mod foreground_tests {
     fn startup_prompt_stays_at_top_when_window_grows_after_shell_output() {
         let fg = Rgb::new(245, 245, 245);
         let mut grid = TerminalGrid::new_with_theme(12, 3, fg, [fg; 16], 100);
-        grid.feed(b"Fish welcome\\r\\n> ");
+        grid.feed(b"Fish welcome\r\n> ");
         assert_eq!(grid.cursor(), (2, 1));
 
         grid.resize(12, 8);
