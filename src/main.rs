@@ -1944,12 +1944,17 @@ fn run() -> Result<()> {
                                     settings.command_help_enabled = !settings.command_help_enabled;
                                     gpu.apply_settings(settings.clone());
                                 }
-                                Some(PrefAction::ToggleFish) => settings.use_fish = !settings.use_fish,
+                                Some(PrefAction::ToggleFish) => {
+                                    settings.use_fish = !settings.use_fish;
+                                    gpu.apply_settings(settings.clone());
+                                }
                                 Some(PrefAction::ToggleFishGreeting) => {
                                     settings.show_fish_greeting = !settings.show_fish_greeting;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::ToggleStarship) => {
                                     settings.use_starship = !settings.use_starship;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::EditQuestion) => {
                                     preferences.question_editing = true;
