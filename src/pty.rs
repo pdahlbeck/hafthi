@@ -18,6 +18,32 @@ pub enum AppEvent {
     ImageChosen(Option<String>),
 }
 
+// fish 4 queries Primary Device Attributes with CSI 0 c on startup.
+// The query may be split across PTY reads, so retain a small parser state.
+#[derive(Default)]
+struct PrimaryDeviceQuery {
+    state: u8,
+}
+
+impl PrimaryDeviceQuery {
+    fn observe(&mut self, bytes: &[u8]) -> usize {
+        let mut queries = 0;
+        for &byte in bytes {
+            self.state = match (self.state, byte) {
+                (_, 0x1b) => 1,
+                (1, b'[') => 2,
+                (2, b'0') => 3,
+                (2, b'c') | (3, b'c') => {
+                    queries += 1;
+                    0
+                }
+                _ => 0,
+            };
+        }
+        queries
+    }
+}
+
 pub struct PtySession {
     master: Box<dyn MasterPty + Send>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -121,12 +147,21 @@ impl PtySession {
         ));
 
         let reader_proxy = proxy.clone();
+        let query_writer = Arc::clone(&writer);
         thread::spawn(move || {
+            let mut primary_device_query = PrimaryDeviceQuery::default();
             let mut buf = [0u8; 8192];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
+                        for _ in 0..primary_device_query.observe(&buf[..n]) {
+                            // Conservative VT100 DA1: no optional terminal capabilities.
+                            if let Ok(mut output) = query_writer.lock() {
+                                let _ = output.write_all(b"\x1b[?1;0c");
+                                let _ = output.flush();
+                            }
+                        }
                         if reader_proxy
                             .send_event(AppEvent::PtyOutput(buf[..n].to_vec()))
                             .is_err()
@@ -171,6 +206,15 @@ impl PtySession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn answers_primary_device_query_across_pty_reads() {
+        let mut query = PrimaryDeviceQuery::default();
+        assert_eq!(query.observe(b"prompt\\x1b[0"), 0);
+        assert_eq!(query.observe(b"cother\\x1b[c"), 2);
+        assert_eq!(query.observe(b"\\x1b[31m\\x1b[1c"), 0);
+        assert_eq!(query.observe(b"\\x1b[0c"), 1);
+    }
 
     #[test]
     fn starts_account_shell_without_shell_environment() {
