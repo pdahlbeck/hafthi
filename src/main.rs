@@ -22,7 +22,7 @@ use glyphon::{
 };
 use background::BackgroundRenderer;
 use menu::{ContextMenu, MenuAction};
-use preferences::{PrefAction, PrefPage, PreferencesPanel, TEXT_SWATCHES};
+use preferences::{Plugin, PrefAction, PrefPage, PreferencesPanel, TEXT_SWATCHES};
 use pty::{AppEvent, PtySession};
 use settings::{config_path, Settings};
 use terminal::TerminalGrid;
@@ -627,7 +627,10 @@ impl GpuState {
                 add(page.title(), 42.0, y, 139.0, 14.0,
                     if prefs.page == page { primary } else { muted });
             }
-            add(prefs.page.title(), 213.0, 21.0, 350.0, 19.0, primary);
+            let heading = if prefs.page == PrefPage::Plugins {
+                prefs.plugin.map_or("Plugins", Plugin::title)
+            } else { prefs.page.title() };
+            add(heading, 213.0, 21.0, 350.0, 19.0, primary);
             match prefs.page {
                 PrefPage::Appearance => {
                     add("LOOK & FEEL", 226.0, 91.0, 180.0, 11.0, accent);
@@ -660,22 +663,6 @@ impl GpuState {
                     add("Scrollback lines", 226.0, 357.0, 200.0, 15.0, primary);
                     add(&self.settings.scrollback.to_string(), 530.0, 358.0, 90.0, 13.0, muted);
                 }
-                PrefPage::Shell => {
-                    add("FISH", 226.0, 91.0, 180.0, 11.0, accent);
-                    add("Use Fish when installed", 226.0, 132.0, 360.0, 15.0, primary);
-                    add(if pty::installed_program("fish").is_some() { "Fish detected" } else { "Fish not installed; using your login shell" },
-                        226.0, 160.0, 475.0, 12.0, muted);
-                    add("FISH WELCOME MESSAGE", 226.0, 190.0, 350.0, 11.0, accent);
-                    add("Show greeting in Hafþi", 226.0, 228.0, 360.0, 15.0, primary);
-                    add("Hidden by default; your Fish config stays untouched.",
-                        226.0, 256.0, 470.0, 12.0, muted);
-                    add("STARSHIP PROMPT", 226.0, 286.0, 300.0, 11.0, accent);
-                    add("Use Starship when installed", 226.0, 325.0, 380.0, 15.0, primary);
-                    add(if pty::installed_program("starship").is_some() { "Starship detected" } else { "Starship not installed" },
-                        226.0, 353.0, 470.0, 12.0, muted);
-                    add("Save, close all Hafþi windows, then reopen to apply changes.",
-                        226.0, 379.0, 470.0, 11.0, accent);
-                }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
                     add("Image / GIF", 226.0, 189.0, 260.0, 15.0, primary);
@@ -693,27 +680,75 @@ impl GpuState {
                     add(&self.settings.branding_max_fps.to_string(),
                         566.0, 355.0, 56.0, 13.0, muted);
                 }
-                PrefPage::CommandHelp => {
-                    add("OPTIONAL ASSISTANT", 226.0, 91.0, 350.0, 11.0, accent);
-                    add("Linux command help", 226.0, 132.0, 330.0, 16.0, primary);
-                    add("Describe what you want to do in Linux.",
-                        226.0, 159.0, 470.0, 12.0, muted);
-                    add("YOUR QUESTION", 226.0, 209.0, 280.0, 11.0, accent);
-                    let question = if prefs.question_input.is_empty() {
-                        "How do I find a file?".to_string()
-                    } else {
-                        let text = prefs.question_input.chars().rev().take(48).collect::<String>()
-                            .chars().rev().collect::<String>();
-                        format!("{}{}", if prefs.question_input.chars().count() > 48 { "…" } else { "" }, text)
-                    };
-                    add(&question, 239.0, 242.0, 452.0, 14.0,
-                        if prefs.question_input.is_empty() { muted } else { primary });
-                    if prefs.question_editing { add("▏", 683.0, 242.0, 14.0, 14.0, accent); }
-                    add("Answer appears in the terminal. Review commands before use.",
-                        226.0, 301.0, 357.0, 11.0, muted);
-                    add("Your question is sent online via Pollinations.",
-                        370.0, 360.0, 330.0, 11.0, muted);
-                }
+                PrefPage::Plugins => match prefs.plugin {
+                    None => {
+                        add("Optional tools for your shell, prompt, and command help.",
+                            226.0, 82.0, 478.0, 12.0, muted);
+                        add("Install them yourself on Arch Linux using pacman.",
+                            226.0, 104.0, 478.0, 12.0, muted);
+                        for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
+                            let y = 139.0 + index as f32 * 89.0;
+                            let symbol = match plugin {
+                                Plugin::Fish => ">",
+                                Plugin::Starship => "✦",
+                                Plugin::Tgpt => "?",
+                            };
+                            let status = match plugin {
+                                Plugin::Fish => if self.settings.use_fish { "Shell · enabled" } else { "Shell · disabled" },
+                                Plugin::Starship => if self.settings.use_starship { "Prompt · enabled" } else { "Prompt · disabled" },
+                                Plugin::Tgpt => if self.settings.command_help_enabled { "Command help · enabled" } else { "Command help · disabled" },
+                            };
+                            add(symbol, 230.0, y + 21.0, 26.0, 20.0, accent);
+                            add(plugin.title(), 275.0, y + 12.0, 250.0, 16.0, primary);
+                            add(status, 275.0, y + 40.0, 305.0, 12.0, muted);
+                            add("›", 590.0, y + 22.0, 20.0, 20.0, muted);
+                        }
+                    }
+                    Some(Plugin::Fish) => {
+                        add("SHELL", 226.0, 91.0, 180.0, 11.0, accent);
+                        add("Use Fish when installed", 226.0, 132.0, 360.0, 15.0, primary);
+                        add(if pty::installed_program("fish").is_some() { "Fish detected" } else { "Fish not installed; using your login shell" },
+                            226.0, 160.0, 475.0, 12.0, muted);
+                        add("FISH WELCOME MESSAGE", 226.0, 190.0, 350.0, 11.0, accent);
+                        add("Show greeting in Hafþi", 226.0, 228.0, 360.0, 15.0, primary);
+                        add("Hidden by default; your Fish config stays untouched.",
+                            226.0, 256.0, 470.0, 12.0, muted);
+                        add("Install yourself: sudo pacman -S --needed fish", 226.0, 314.0, 470.0, 12.0, muted);
+                    }
+                    Some(Plugin::Starship) => {
+                        add("PROMPT", 226.0, 91.0, 180.0, 11.0, accent);
+                        add("Use Starship when installed", 226.0, 132.0, 380.0, 15.0, primary);
+                        add(if pty::installed_program("starship").is_some() { "Starship detected" } else { "Starship not installed" },
+                            226.0, 160.0, 470.0, 12.0, muted);
+                        add("Works in new Fish sessions. Your Fish config is unchanged.",
+                            226.0, 207.0, 470.0, 12.0, muted);
+                        add("Install yourself: sudo pacman -S --needed starship",
+                            226.0, 314.0, 470.0, 12.0, muted);
+                    }
+                    Some(Plugin::Tgpt) => {
+                        add("OPTIONAL ASSISTANT", 226.0, 91.0, 350.0, 11.0, accent);
+                        add("Linux command help", 226.0, 132.0, 330.0, 16.0, primary);
+                        add("Describe what you want to do in Linux.",
+                            226.0, 159.0, 470.0, 12.0, muted);
+                        add("YOUR QUESTION", 226.0, 198.0, 280.0, 11.0, accent);
+                        let question = if prefs.question_input.is_empty() {
+                            "How do I find a file?".to_string()
+                        } else {
+                            let text = prefs.question_input.chars().rev().take(48).collect::<String>()
+                                .chars().rev().collect::<String>();
+                            format!("{}{}", if prefs.question_input.chars().count() > 48 { "…" } else { "" }, text)
+                        };
+                        add(&question, 239.0, 231.0, 452.0, 14.0,
+                            if prefs.question_input.is_empty() { muted } else { primary });
+                        if prefs.question_editing { add("▏", 683.0, 231.0, 14.0, 14.0, accent); }
+                        add("Answer appears in the terminal. Review commands before use.",
+                            226.0, 290.0, 355.0, 11.0, muted);
+                        add("Install yourself: sudo pacman -S --needed tgpt",
+                            226.0, 330.0, 470.0, 11.0, muted);
+                        add("Questions are sent online via tgpt.",
+                            226.0, 387.0, 470.0, 11.0, muted);
+                    }
+                },
             }
             for button in prefs.button_rects() {
                 let caption = match button.action {
@@ -736,11 +771,13 @@ impl GpuState {
                     PrefAction::ToggleFish => if self.settings.use_fish { "On" } else { "Off" },
                     PrefAction::ToggleFishGreeting => if self.settings.show_fish_greeting { "On" } else { "Off" },
                     PrefAction::ToggleStarship => if self.settings.use_starship { "On" } else { "Off" },
+                    PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
+                    PrefAction::BackToPlugins => "‹ Plugins",
                     PrefAction::AskQuestion => "Ask tgpt",
                     PrefAction::InstallTgpt => "Install tgpt",
                     PrefAction::Cancel => "Cancel",
                     PrefAction::Save => "Save",
-                    PrefAction::SelectPage(_) | PrefAction::OpacitySet(_)
+                    PrefAction::SelectPage(_) | PrefAction::OpenPlugin(_) | PrefAction::OpacitySet(_)
                     | PrefAction::TextColor(_) | PrefAction::EditTextColor
                     | PrefAction::EditQuestion => continue,
                 };
@@ -1013,18 +1050,36 @@ impl GpuState {
                         shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                     }
                 }
-                PrefPage::Shell => {
-                    shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
-                    shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
-                    shape(226.0, 183.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
-                    shape(226.0, 280.0, 476.0, 1.0, 0.0, [0.11, 0.13, 0.15, 1.0]);
-                }
-                PrefPage::CommandHelp => {
-                    for (y, h) in [(78.0, 100.0), (191.0, 144.0), (341.0, 56.0)] {
-                        shape(208.0, y, 512.0, h, 5.0, card_border);
-                        shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                PrefPage::Plugins => match prefs.plugin {
+                    None => {
+                        for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
+                            let y = 139.0 + index as f32 * 89.0;
+                            let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
+                            shape(208.0, y - 1.0, 512.0, 80.0, 9.0, card_border);
+                            shape(209.0, y, 510.0, 78.0, 8.0,
+                                if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
+                            shape(224.0, y + 22.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
+                        }
                     }
-                }
+                    Some(Plugin::Fish) => {
+                        for (y, h) in [(78.0, 102.0), (186.0, 112.0), (306.0, 91.0)] {
+                            shape(208.0, y, 512.0, h, 5.0, card_border);
+                            shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                        }
+                    }
+                    Some(Plugin::Starship) => {
+                        for (y, h) in [(78.0, 102.0), (186.0, 112.0), (306.0, 91.0)] {
+                            shape(208.0, y, 512.0, h, 5.0, card_border);
+                            shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                        }
+                    }
+                    Some(Plugin::Tgpt) => {
+                        for (y, h) in [(78.0, 100.0), (185.0, 133.0), (326.0, 76.0)] {
+                            shape(208.0, y, 512.0, h, 5.0, card_border);
+                            shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                        }
+                    }
+                },
                 PrefPage::Background => {
                     for (y, h) in [(78.0, 100.0), (182.0, 131.0), (326.0, 70.0)] {
                         shape(208.0, y, 512.0, h, 5.0, card_border);
@@ -1040,6 +1095,9 @@ impl GpuState {
                 PrefAction::ImageFull
             };
             for button in prefs.button_rects() {
+                if matches!(button.action, PrefAction::OpenPlugin(_)) {
+                    continue; // The whole card already has its own hover surface.
+                }
                 if let PrefAction::TextColor(index) = button.action {
                     let swatch = TEXT_SWATCHES[index as usize];
                     let bx = (button.x - prefs.x) / scale;
@@ -1782,7 +1840,7 @@ fn run() -> Result<()> {
                                 window.request_redraw();
                                 return;
                             }
-                            if preferences.page == PrefPage::CommandHelp {
+                            if preferences.page == PrefPage::Plugins && preferences.plugin == Some(Plugin::Tgpt) {
                                 if event.logical_key == Key::Named(NamedKey::Space) {
                                     settings.command_help_enabled = !settings.command_help_enabled;
                                     gpu.apply_settings(settings.clone());
@@ -1839,7 +1897,8 @@ fn run() -> Result<()> {
                                 Key::Character(ch) if ch.eq_ignore_ascii_case("h") => {
                                     preferences_backup = Some(settings.clone());
                                     preferences.open(gpu.config.width, gpu.config.height, settings.scale_factor);
-                                    preferences.page = PrefPage::CommandHelp;
+                                    preferences.page = PrefPage::Plugins;
+                                    preferences.plugin = Some(Plugin::Tgpt);
                                     preferences.question_editing = settings.command_help_enabled;
                                     dirty = true;
                                     window.request_redraw();
@@ -1937,8 +1996,24 @@ fn run() -> Result<()> {
                             match action {
                                 Some(PrefAction::SelectPage(page)) => {
                                     preferences.page = page;
+                                    preferences.plugin = None;
                                     preferences.hovered = None;
                                     preferences.question_editing = false;
+                                }
+                                Some(PrefAction::OpenPlugin(plugin)) => {
+                                    preferences.plugin = Some(plugin);
+                                    preferences.hovered = None;
+                                }
+                                Some(PrefAction::BackToPlugins) => {
+                                    preferences.plugin = None;
+                                    preferences.question_editing = false;
+                                }
+                                Some(PrefAction::OpenPluginGithub(plugin)) => {
+                                    if let Err(error) = std::process::Command::new("xdg-open")
+                                        .arg(plugin.github_url()).spawn()
+                                    {
+                                        eprintln!("Could not open {} on GitHub: {error}", plugin.title());
+                                    }
                                 }
                                 Some(PrefAction::ToggleCommandHelp) => {
                                     settings.command_help_enabled = !settings.command_help_enabled;
@@ -2236,7 +2311,8 @@ fn run() -> Result<()> {
                                 Some(MenuAction::AskTgpt) => {
                                     preferences_backup = Some(settings.clone());
                                     preferences.open(gpu.config.width, gpu.config.height, settings.scale_factor);
-                                    preferences.page = PrefPage::CommandHelp;
+                                    preferences.page = PrefPage::Plugins;
+                                    preferences.plugin = Some(Plugin::Tgpt);
                                     preferences.question_editing = true;
                                 }
                                 Some(MenuAction::EditConfig) => {
