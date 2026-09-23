@@ -673,8 +673,8 @@ impl GpuState {
                     add("Use Starship when installed", 226.0, 325.0, 380.0, 15.0, primary);
                     add(if pty::installed_program("starship").is_some() { "Starship detected" } else { "Starship not installed" },
                         226.0, 353.0, 470.0, 12.0, muted);
-                    add("Shell changes take effect after restarting Hafþi.",
-                        226.0, 379.0, 470.0, 11.0, muted);
+                    add("Save, close all Hafþi windows, then reopen to apply changes.",
+                        226.0, 379.0, 470.0, 11.0, accent);
                 }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
