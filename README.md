@@ -1,4 +1,5 @@
-![Hafþi terminal — preview of the terminal and preferences](assets/hafthi-banner.jpg)
+<img width="1271" height="1237" alt="ChatGPT Image Sep 23, 2026, 03_50_34 PM" src="https://github.com/user-attachments/assets/d217d0dc-f9d0-422b-a0ce-887af79d86e7" />
+
 
 # Hafþi
 
