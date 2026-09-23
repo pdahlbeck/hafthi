@@ -210,10 +210,10 @@ mod tests {
     #[test]
     fn answers_primary_device_query_across_pty_reads() {
         let mut query = PrimaryDeviceQuery::default();
-        assert_eq!(query.observe(b"prompt\\x1b[0"), 0);
-        assert_eq!(query.observe(b"cother\\x1b[c"), 2);
-        assert_eq!(query.observe(b"\\x1b[31m\\x1b[1c"), 0);
-        assert_eq!(query.observe(b"\\x1b[0c"), 1);
+        assert_eq!(query.observe(b"prompt\x1b[0"), 0);
+        assert_eq!(query.observe(b"cother\x1b[c"), 2);
+        assert_eq!(query.observe(b"\x1b[31m\x1b[1c"), 0);
+        assert_eq!(query.observe(b"\x1b[0c"), 1);
     }
 
     #[test]
