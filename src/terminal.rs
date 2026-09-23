@@ -293,10 +293,11 @@ impl TerminalGrid {
         let copy_rows = rows.min(old_rows);
         let copy_cols = cols.min(old_cols);
 
-        // A newly started terminal must remain anchored at the top-left.
-        // Once terminal output has progressed beyond the first row (or there is
-        // scrollback), preserve the existing bottom-anchored resize behaviour.
-        let initial_screen = self.history.is_empty() && self.cursor_y == 0;
+        // Wayland may report the final window size after Fish has already
+        // printed a multi-line prompt. Keep its rows at the top while they
+        // still fit, even when the cursor has moved beyond the first row.
+        // Preserve the bottom when shrinking past the cursor or scrolling.
+        let initial_screen = self.history.is_empty() && old_cursor_y < rows;
         let (old_first, new_first) = if initial_screen {
             (0, 0)
         } else {
@@ -584,6 +585,24 @@ impl Perform for TerminalGrid {
 #[cfg(test)]
 mod foreground_tests {
     use super::*;
+
+    #[test]
+    fn startup_prompt_stays_at_top_when_window_grows_after_shell_output() {
+        let fg = Rgb::new(245, 245, 245);
+        let mut grid = TerminalGrid::new_with_theme(12, 3, fg, [fg; 16], 100);
+        grid.feed(b"Fish welcome\r\n> ");
+        assert_eq!(grid.cursor(), (2, 1));
+
+        grid.resize(12, 8);
+
+        assert_eq!(grid.cursor(), (2, 1));
+        assert_eq!(
+            grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(),
+            "Fish welcome"
+        );
+        assert_eq!(grid.current_row(1)[..2].iter().map(|cell| cell.ch).collect::<String>(), "> ");
+        assert!(grid.current_row(6).iter().all(|cell| cell.ch == ' '));
+    }
 
     #[test]
     fn partial_screen_erase_preserves_previous_command_output() {
