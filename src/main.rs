@@ -2088,9 +2088,11 @@ fn run() -> Result<()> {
                                 }
                                 Some(PrefAction::GifFpsDown) => {
                                     settings.branding_max_fps = settings.branding_max_fps.saturating_sub(1).max(1);
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::GifFpsUp) => {
                                     settings.branding_max_fps = (settings.branding_max_fps + 1).min(30);
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::Save) => {
                                     if preferences.color_editing {
