@@ -2,21 +2,46 @@
 pub enum PrefPage {
     Appearance,
     Terminal,
-    Shell,
     Background,
-    CommandHelp,
+    Plugins,
 }
 
 impl PrefPage {
-    pub const ALL: [Self; 5] = [Self::Appearance, Self::Terminal, Self::Shell, Self::Background, Self::CommandHelp];
+    pub const ALL: [Self; 4] = [Self::Appearance, Self::Terminal, Self::Background, Self::Plugins];
 
     pub fn title(self) -> &'static str {
         match self {
             Self::Appearance => "Appearance",
             Self::Terminal => "Terminal",
-            Self::Shell => "Shell & prompt",
             Self::Background => "Background",
-            Self::CommandHelp => "Command help",
+            Self::Plugins => "Plugins",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Plugin {
+    Fish,
+    Starship,
+    Tgpt,
+}
+
+impl Plugin {
+    pub const ALL: [Self; 3] = [Self::Fish, Self::Starship, Self::Tgpt];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Fish => "Fish",
+            Self::Starship => "Starship",
+            Self::Tgpt => "tgpt",
+        }
+    }
+
+    pub fn github_url(self) -> &'static str {
+        match self {
+            Self::Fish => "https://github.com/fish-shell/fish-shell",
+            Self::Starship => "https://github.com/starship/starship",
+            Self::Tgpt => "https://github.com/aandrew-me/tgpt",
         }
     }
 }
@@ -24,6 +49,9 @@ impl PrefPage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefAction {
     SelectPage(PrefPage),
+    OpenPlugin(Plugin),
+    BackToPlugins,
+    OpenPluginGithub(Plugin),
     FontDown,
     FontUp,
     OpacitySet(u8),
@@ -76,6 +104,7 @@ pub struct PreferencesPanel {
     pub width: f32,
     pub scale: f32,
     pub page: PrefPage,
+    pub plugin: Option<Plugin>,
     pub hovered: Option<PrefAction>,
     pub hovered_page: Option<PrefPage>,
     pub color_editing: bool,
@@ -98,6 +127,7 @@ impl PreferencesPanel {
             width: Self::WIDTH,
             scale: 1.0,
             page: PrefPage::Appearance,
+            plugin: None,
             hovered: None,
             hovered_page: None,
             color_editing: false,
@@ -194,11 +224,6 @@ impl PreferencesPanel {
                 add(626.0, 351.0, 35.0, 34.0, ScrollbackDown);
                 add(669.0, 351.0, 35.0, 34.0, ScrollbackUp);
             }
-            PrefPage::Shell => {
-                add(620.0, 125.0, 84.0, 34.0, ToggleFish);
-                add(620.0, 221.0, 84.0, 34.0, ToggleFishGreeting);
-                add(620.0, 318.0, 84.0, 34.0, ToggleStarship);
-            }
             PrefPage::Background => {
                 add(226.0, 126.0, 106.0, 35.0, ImageOff);
                 add(337.0, 126.0, 126.0, 35.0, ImageBanner);
@@ -208,11 +233,35 @@ impl PreferencesPanel {
                 add(626.0, 348.0, 35.0, 34.0, GifFpsDown);
                 add(669.0, 348.0, 35.0, 34.0, GifFpsUp);
             }
-            PrefPage::CommandHelp => {
-                add(620.0, 125.0, 84.0, 34.0, ToggleCommandHelp);
-                add(226.0, 235.0, 478.0, 38.0, EditQuestion);
-                add(590.0, 287.0, 114.0, 35.0, AskQuestion);
-                add(226.0, 351.0, 134.0, 35.0, InstallTgpt);
+            PrefPage::Plugins => match self.plugin {
+                None => {
+                    for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
+                        let y = 139.0 + index as f32 * 89.0;
+                        add(209.0, y, 404.0, 78.0, OpenPlugin(plugin));
+                        add(620.0, y + 22.0, 84.0, 34.0, match plugin {
+                            Plugin::Fish => ToggleFish,
+                            Plugin::Starship => ToggleStarship,
+                            Plugin::Tgpt => ToggleCommandHelp,
+                        });
+                    }
+                }
+                Some(plugin) => {
+                    add(592.0, 20.0, 112.0, 34.0, BackToPlugins);
+                    add(226.0, 349.0, 182.0, 34.0, OpenPluginGithub(plugin));
+                    match plugin {
+                        Plugin::Fish => {
+                            add(620.0, 125.0, 84.0, 34.0, ToggleFish);
+                            add(620.0, 221.0, 84.0, 34.0, ToggleFishGreeting);
+                        }
+                        Plugin::Starship => add(620.0, 125.0, 84.0, 34.0, ToggleStarship),
+                        Plugin::Tgpt => {
+                            add(620.0, 125.0, 84.0, 34.0, ToggleCommandHelp);
+                            add(226.0, 224.0, 478.0, 38.0, EditQuestion);
+                            add(590.0, 276.0, 114.0, 35.0, AskQuestion);
+                            add(430.0, 349.0, 134.0, 34.0, InstallTgpt);
+                        }
+                    }
+                }
             }
         }
         add(526.0, 430.0, 86.0, 34.0, Cancel);
@@ -316,6 +365,27 @@ mod tests {
         assert!(panel.x >= 0.0 && panel.y >= 0.0);
         assert!(panel.x + panel.width <= 620.0);
         assert!(panel.y + panel.height() <= 440.0);
+    }
+
+    #[test]
+    fn plugin_card_switch_and_detail_actions_have_separate_targets() {
+        let mut panel = PreferencesPanel::new();
+        panel.open(980, 640, 1.0);
+        panel.page = PrefPage::Plugins;
+
+        let buttons = panel.button_rects();
+        let fish_card = buttons.iter().find(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Fish)).unwrap();
+        let fish_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleFish).unwrap();
+        assert_eq!(panel.action_at(fish_card.x + 10.0, fish_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Fish)));
+        assert_eq!(panel.action_at(fish_switch.x + 10.0, fish_switch.y + 10.0), Some(PrefAction::ToggleFish));
+
+        panel.plugin = Some(Plugin::Tgpt);
+        let buttons = panel.button_rects();
+        for action in [PrefAction::BackToPlugins, PrefAction::OpenPluginGithub(Plugin::Tgpt)] {
+            let rect = buttons.iter().find(|rect| rect.action == action).unwrap();
+            assert_eq!(panel.action_at(rect.x + 10.0, rect.y + 10.0), Some(action));
+        }
+        assert!(!buttons.iter().any(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Fish)));
     }
 }
 use crate::terminal::Rgb;
