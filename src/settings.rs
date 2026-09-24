@@ -19,6 +19,8 @@ pub struct Settings {
     pub use_fish: bool,
     pub show_fish_greeting: bool,
     pub use_starship: bool,
+    pub use_sampler: bool,
+    pub use_yazi: bool,
     pub foreground: Rgb,
     pub background: Rgb,
     pub cursor: Rgb,
@@ -49,6 +51,8 @@ impl Default for Settings {
             use_fish: true,
             show_fish_greeting: false,
             use_starship: true,
+            use_sampler: false,
+            use_yazi: false,
             foreground: Rgb::new(0, 0, 0),
             background: Rgb::new(246, 244, 241),
             cursor: Rgb::new(0, 0, 0),
@@ -184,6 +188,8 @@ impl Settings {
         if let Some(v) = get("shell", "use_fish") { out.use_fish = enabled(v); }
         if let Some(v) = get("shell", "show_fish_greeting") { out.show_fish_greeting = enabled(v); }
         if let Some(v) = get("shell", "use_starship") { out.use_starship = enabled(v); }
+        if let Some(v) = get("plugins", "sampler") { out.use_sampler = enabled(v); }
+        if let Some(v) = get("plugins", "yazi") { out.use_yazi = enabled(v); }
         if let Some(v) = get("gpu", "font_scale").and_then(|v| v.parse::<f32>().ok()) {
             out.gpu_font_scale = v.clamp(0.75, 3.0);
         }
@@ -312,6 +318,8 @@ impl Settings {
         set_key(&mut text, "shell", "show_fish_greeting",
             if self.show_fish_greeting { "true" } else { "false" });
         set_key(&mut text, "shell", "use_starship", if self.use_starship { "true" } else { "false" });
+        set_key(&mut text, "plugins", "sampler", if self.use_sampler { "true" } else { "false" });
+        set_key(&mut text, "plugins", "yazi", if self.use_yazi { "true" } else { "false" });
         set_key(&mut text, "colors", "foreground", &format!(
             "#{:02x}{:02x}{:02x}", self.foreground.r, self.foreground.g, self.foreground.b
         ));

@@ -7,7 +7,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.22:** Fish, Starship, and tgpt each have their own page in **Preferences → Plugins**, with on/off controls in the overview and links to their GitHub projects. Linux/Wayland is the only supported platform.
+> **Version 0.7.23:** Fish, Starship, tgpt, Sampler and Yazi have their own pages in **Preferences → Plugins**. Linux/Wayland is the only supported platform.
 
 ### Optional Fish and Starship
 
@@ -25,6 +25,12 @@ When Fish and Starship are both installed, Hafþi initializes Starship in Fish b
 
 Open **Preferences → Plugins → tgpt** (or press **Ctrl+Shift+H**) and turn the feature on. You can also switch it on or off in the Plugins overview. Its settings page links to the tgpt GitHub project. Click **Install tgpt** to place `sudo pacman -S --needed tgpt` at your shell prompt, then press Enter to install it. When enabled, **Ask tgpt…** also appears in the right-click menu and opens the question field directly. Type a question and press Enter or click **Ask tgpt**. The terminal shows a short `hafthi --ask 'your question'` command and then the answer; the full instructions to tgpt stay inside Hafþi. Answers use the language selected by your Linux locale (`LC_ALL`, `LANGUAGE`, `LC_MESSAGES`, or `LANG`), with English as a fallback. Your question is sent to the online provider; suggested commands are never run automatically. This is an optional service and requires an internet connection. Press Space to toggle the feature when the tgpt settings page is open, or Enter to focus its question field.
 
+### Optional Sampler and Yazi
+
+Install [Sampler](https://github.com/sqshq/sampler) yourself from the AUR with `paru -S sampler` (or another AUR helper). Install [Yazi](https://github.com/sxyazi/yazi) from the Arch repositories with `sudo pacman -S --needed yazi`. On other distributions, use the appropriate packages. In **Preferences → Plugins**, turn each tool on and select **Open Sampler** or **Open Yazi**. Each runs in its own Hafþi window; closing it leaves your shell window open. The install buttons type commands at the shell prompt without running them.
+
+The first Sampler launch creates `~/.config/hafthi/sampler.yml`, a copy of the included example dashboard. **Edit dashboard…** opens it using your desktop's default handler. Your edits persist through upgrades; remove that file if you want the bundled example copied again. The dashboard runs local commands and contacts github.com for a response-time chart. Review the config before running it. Yazi opens in your home directory. Image previews require a compatible terminal image protocol or an available fallback such as Chafa; Hafþi does not advertise a native image protocol.
+
 ## Current stack
 
 - Rust
@@ -41,6 +47,7 @@ Open **Preferences → Plugins → tgpt** (or press **Ctrl+Shift+H**) and turn t
 - GPU-rendered terminal text
 - real PTY shell operation
 - optional Fish shell, Fish greeting control and Starship prompt
+- optional Sampler dashboard and Yazi file manager, launched in separate windows
 - ANSI 16-color, 256-color and truecolor support
 - bold text
 - GPU cursor and selection
@@ -124,7 +131,7 @@ bash run-podman.sh
 
 The first launch builds a local image from `Containerfile`; subsequent launches reuse it. After pulling new commits, rebuild it with `bash run-podman.sh --build`. Rust/Cargo are installed only in the build stage of the image, so the host does not need them. An Intel GPU is sufficient if it has working Mesa/Vulkan drivers. This needs a **Wayland** login session, a local rootless Podman installation with `crun`, and access to `/dev/dri`.
 
-The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. Optional Fish, Starship and tgpt installations must also be made **inside the image** to work in Podman; they are not bundled.
+The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. Optional Fish, Starship, tgpt, Sampler and Yazi must also be installed **inside the image** to work in Podman; they are not bundled.
 
 ## Configuration
 
@@ -134,7 +141,7 @@ Hafþi uses:
 ~/.config/hafthi/config.ini
 ```
 
-The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback, branding and shell options. Preferences saves the shell options under `[shell]` as `use_fish`, `show_fish_greeting` and `use_starship`.
+The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback, branding and shell options. Preferences saves the shell options under `[shell]` as `use_fish`, `show_fish_greeting` and `use_starship`, and the optional Sampler and Yazi switches under `[plugins]`.
 
 ## Transparency on Hyprland
 

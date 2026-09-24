@@ -4,6 +4,7 @@ compile_error!("Hafþi currently supports Linux/Wayland only.");
 mod background;
 mod diagnostics;
 mod menu;
+mod plugins;
 mod preferences;
 mod pty;
 mod settings;
@@ -682,26 +683,30 @@ impl GpuState {
                 }
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
-                        add("Optional tools for your shell, prompt, and command help.",
+                        add("Optional tools for your shell, prompt, files and dashboards.",
                             226.0, 82.0, 478.0, 12.0, muted);
-                        add("Install them yourself on Arch Linux using pacman.",
-                            226.0, 104.0, 478.0, 12.0, muted);
+                        add("Install them yourself with pacman or an AUR helper.",
+                            226.0, 100.0, 478.0, 12.0, muted);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 139.0 + index as f32 * 89.0;
+                            let y = 112.0 + index as f32 * 59.0;
                             let symbol = match plugin {
                                 Plugin::Fish => ">",
                                 Plugin::Starship => "✦",
                                 Plugin::Tgpt => "?",
+                                Plugin::Sampler => "▥",
+                                Plugin::Yazi => "▣",
                             };
                             let status = match plugin {
                                 Plugin::Fish => if self.settings.use_fish { "Shell · enabled" } else { "Shell · disabled" },
                                 Plugin::Starship => if self.settings.use_starship { "Prompt · enabled" } else { "Prompt · disabled" },
                                 Plugin::Tgpt => if self.settings.command_help_enabled { "Command help · enabled" } else { "Command help · disabled" },
+                                Plugin::Sampler => if self.settings.use_sampler { "Dashboard · enabled" } else { "Dashboard · disabled" },
+                                Plugin::Yazi => if self.settings.use_yazi { "Files · enabled" } else { "Files · disabled" },
                             };
-                            add(symbol, 230.0, y + 21.0, 26.0, 20.0, accent);
-                            add(plugin.title(), 275.0, y + 12.0, 250.0, 16.0, primary);
-                            add(status, 275.0, y + 40.0, 305.0, 12.0, muted);
-                            add("›", 590.0, y + 22.0, 20.0, 20.0, muted);
+                            add(symbol, 230.0, y + 13.0, 26.0, 20.0, accent);
+                            add(plugin.title(), 275.0, y + 4.0, 250.0, 16.0, primary);
+                            add(status, 275.0, y + 27.0, 305.0, 12.0, muted);
+                            add("›", 590.0, y + 13.0, 20.0, 20.0, muted);
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -748,6 +753,30 @@ impl GpuState {
                         add("Questions are sent online via tgpt.",
                             226.0, 387.0, 470.0, 11.0, muted);
                     }
+                    Some(Plugin::Sampler) => {
+                        add("LIVE DASHBOARD", 226.0, 91.0, 300.0, 11.0, accent);
+                        add("Enable Sampler", 226.0, 132.0, 350.0, 15.0, primary);
+                        add(if pty::installed_program("sampler").is_some() { "Sampler detected" } else { "Sampler not installed" },
+                            226.0, 160.0, 470.0, 12.0, muted);
+                        add("Opens in a separate Hafþi window with an editable dashboard.",
+                            226.0, 204.0, 478.0, 12.0, muted);
+                        add("Install from AUR with paru -S sampler (or another helper).",
+                            226.0, 231.0, 478.0, 11.0, muted);
+                        add("The dashboard runs local commands and checks github.com.",
+                            226.0, 294.0, 478.0, 11.0, muted);
+                    }
+                    Some(Plugin::Yazi) => {
+                        add("FILE MANAGER", 226.0, 91.0, 300.0, 11.0, accent);
+                        add("Enable Yazi", 226.0, 132.0, 350.0, 15.0, primary);
+                        add(if pty::installed_program("yazi").is_some() { "Yazi detected" } else { "Yazi not installed" },
+                            226.0, 160.0, 470.0, 12.0, muted);
+                        add("Browse files in a separate Hafþi window.",
+                            226.0, 204.0, 478.0, 12.0, muted);
+                        add("Install yourself: sudo pacman -S --needed yazi",
+                            226.0, 231.0, 478.0, 11.0, muted);
+                        add("Image previews depend on supported terminal protocols.",
+                            226.0, 306.0, 478.0, 11.0, muted);
+                    }
                 },
             }
             for button in prefs.button_rects() {
@@ -771,6 +800,13 @@ impl GpuState {
                     PrefAction::ToggleFish => if self.settings.use_fish { "On" } else { "Off" },
                     PrefAction::ToggleFishGreeting => if self.settings.show_fish_greeting { "On" } else { "Off" },
                     PrefAction::ToggleStarship => if self.settings.use_starship { "On" } else { "Off" },
+                    PrefAction::ToggleSampler => if self.settings.use_sampler { "On" } else { "Off" },
+                    PrefAction::ToggleYazi => if self.settings.use_yazi { "On" } else { "Off" },
+                    PrefAction::OpenSampler => "Open Sampler",
+                    PrefAction::OpenYazi => "Open Yazi",
+                    PrefAction::InstallSampler => "Install Sampler",
+                    PrefAction::InstallYazi => "Install Yazi",
+                    PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Plugins",
                     PrefAction::AskQuestion => "Ask tgpt",
@@ -1053,12 +1089,12 @@ impl GpuState {
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 139.0 + index as f32 * 89.0;
+                            let y = 112.0 + index as f32 * 59.0;
                             let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
-                            shape(208.0, y - 1.0, 512.0, 80.0, 9.0, card_border);
-                            shape(209.0, y, 510.0, 78.0, 8.0,
+                            shape(208.0, y - 1.0, 512.0, 56.0, 9.0, card_border);
+                            shape(209.0, y, 510.0, 54.0, 8.0,
                                 if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
-                            shape(224.0, y + 22.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
+                            shape(224.0, y + 10.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -1075,6 +1111,12 @@ impl GpuState {
                     }
                     Some(Plugin::Tgpt) => {
                         for (y, h) in [(78.0, 100.0), (185.0, 133.0), (326.0, 76.0)] {
+                            shape(208.0, y, 512.0, h, 5.0, card_border);
+                            shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
+                        }
+                    }
+                    Some(Plugin::Sampler | Plugin::Yazi) => {
+                        for (y, h) in [(78.0, 103.0), (186.0, 159.0), (350.0, 52.0)] {
                             shape(208.0, y, 512.0, h, 5.0, card_border);
                             shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                         }
@@ -1113,7 +1155,9 @@ impl GpuState {
                     || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled)
                     || (button.action == PrefAction::ToggleFish && self.settings.use_fish)
                     || (button.action == PrefAction::ToggleFishGreeting && self.settings.show_fish_greeting)
-                    || (button.action == PrefAction::ToggleStarship && self.settings.use_starship);
+                    || (button.action == PrefAction::ToggleStarship && self.settings.use_starship)
+                    || (button.action == PrefAction::ToggleSampler && self.settings.use_sampler)
+                    || (button.action == PrefAction::ToggleYazi && self.settings.use_yazi);
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
                     if hover { [0.12, 0.41, 0.63, 1.0] }
@@ -1639,13 +1683,17 @@ mod command_help_tests {
 }
 
 fn run() -> Result<()> {
+    let plugin = if std::env::args().nth(1).as_deref() == Some("--plugin") {
+        Some(std::env::args().nth(2).context("missing plugin name")?)
+    } else { None };
+    let plugin_command = plugin.as_deref().map(plugins::command).transpose()?;
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
 
     let mut settings = Settings::load();
 
     let builder = WindowBuilder::new()
-        .with_title("Hafþi")
+        .with_title(plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", if name == "yazi" { "Yazi" } else { "Sampler" })))
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -1669,7 +1717,7 @@ fn run() -> Result<()> {
     let mut wayland_no_blur = wayland_effect::NoBlur::attach(&window);
 
     let mut gpu = pollster::block_on(GpuState::new(window.clone(), settings.clone()))?;
-    window.set_title("Hafþi");
+    window.set_title(&plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", if name == "yazi" { "Yazi" } else { "Sampler" })));
     if wayland_no_blur.is_none() {
         eprintln!("Hafþi: ext-background-effect-v1 unavailable, using Hyprland fallback");
         request_hyprland_no_blur();
@@ -1683,7 +1731,11 @@ fn run() -> Result<()> {
         settings.ansi,
         settings.scrollback,
     );
-    let pty = PtySession::spawn(cols, rows, proxy.clone(), &settings)?;
+    let pty = if let Some(command) = plugin_command {
+        PtySession::spawn_with_command(cols, rows, proxy.clone(), command)?
+    } else {
+        PtySession::spawn(cols, rows, proxy.clone(), &settings)?
+    };
 
     let mut selection: Option<((usize, usize), (usize, usize))> = None;
     let mut selecting = false;
@@ -2030,6 +2082,47 @@ fn run() -> Result<()> {
                                 Some(PrefAction::ToggleStarship) => {
                                     settings.use_starship = !settings.use_starship;
                                     gpu.apply_settings(settings.clone());
+                                }
+                                Some(PrefAction::ToggleSampler) => {
+                                    settings.use_sampler = !settings.use_sampler;
+                                }
+                                Some(PrefAction::ToggleYazi) => {
+                                    settings.use_yazi = !settings.use_yazi;
+                                }
+                                Some(PrefAction::OpenSampler | PrefAction::OpenYazi) => {
+                                    let name = if action == Some(PrefAction::OpenSampler) { "sampler" } else { "yazi" };
+                                    let enabled = if name == "sampler" { settings.use_sampler } else { settings.use_yazi };
+                                    if enabled {
+                                        if let Err(error) = plugins::open_window(name) {
+                                            eprintln!("Could not open {name}: {error:#}");
+                                            pty.write(format!("\r\nHafþi: Could not open {name}: {error:#}\r\n").as_bytes());
+                                        } else {
+                                            let _ = settings.save();
+                                            preferences_backup = None;
+                                            preferences.close();
+                                        }
+                                    }
+                                }
+                                Some(PrefAction::InstallSampler | PrefAction::InstallYazi) => {
+                                    let command: &[u8] = if action == Some(PrefAction::InstallSampler) {
+                                        b"paru -S sampler"
+                                    } else { b"sudo pacman -S --needed yazi" };
+                                    preferences.close();
+                                    if let Some(original) = preferences_backup.take() {
+                                        settings = original;
+                                        gpu.apply_settings(settings.clone());
+                                    }
+                                    pty.write(command);
+                                }
+                                Some(PrefAction::EditSamplerConfig) => {
+                                    match plugins::ensure_sampler_config() {
+                                        Ok(path) => {
+                                            if let Err(error) = std::process::Command::new("xdg-open").arg(path).spawn() {
+                                                eprintln!("Could not open Sampler config: {error}");
+                                            }
+                                        }
+                                        Err(error) => eprintln!("Could not create Sampler config: {error:#}"),
+                                    }
                                 }
                                 Some(PrefAction::EditQuestion) => {
                                     preferences.question_editing = true;

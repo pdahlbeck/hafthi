@@ -119,6 +119,10 @@ fn shell_command(settings: &Settings) -> CommandBuilder {
 
 impl PtySession {
     pub fn spawn(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, settings: &Settings) -> Result<Self> {
+        Self::spawn_with_command(cols, rows, proxy, shell_command(settings))
+    }
+
+    pub fn spawn_with_command(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, command: CommandBuilder) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -131,8 +135,8 @@ impl PtySession {
 
         let mut child = pair
             .slave
-            .spawn_command(shell_command(settings))
-            .context("failed to spawn shell in PTY")?;
+            .spawn_command(command)
+            .context("failed to spawn process in PTY")?;
 
         drop(pair.slave);
 
