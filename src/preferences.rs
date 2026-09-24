@@ -24,16 +24,20 @@ pub enum Plugin {
     Fish,
     Starship,
     Tgpt,
+    Sampler,
+    Yazi,
 }
 
 impl Plugin {
-    pub const ALL: [Self; 3] = [Self::Fish, Self::Starship, Self::Tgpt];
+    pub const ALL: [Self; 5] = [Self::Fish, Self::Starship, Self::Tgpt, Self::Sampler, Self::Yazi];
 
     pub fn title(self) -> &'static str {
         match self {
             Self::Fish => "Fish",
             Self::Starship => "Starship",
             Self::Tgpt => "tgpt",
+            Self::Sampler => "Sampler",
+            Self::Yazi => "Yazi",
         }
     }
 
@@ -42,6 +46,8 @@ impl Plugin {
             Self::Fish => "https://github.com/fish-shell/fish-shell",
             Self::Starship => "https://github.com/starship/starship",
             Self::Tgpt => "https://github.com/aandrew-me/tgpt",
+            Self::Sampler => "https://github.com/sqshq/sampler",
+            Self::Yazi => "https://github.com/sxyazi/yazi",
         }
     }
 }
@@ -70,6 +76,13 @@ pub enum PrefAction {
     EditQuestion,
     AskQuestion,
     InstallTgpt,
+    ToggleSampler,
+    ToggleYazi,
+    OpenSampler,
+    OpenYazi,
+    InstallSampler,
+    InstallYazi,
+    EditSamplerConfig,
     ImageOff,
     ImageBanner,
     ImageFull,
@@ -112,6 +125,7 @@ pub struct PreferencesPanel {
     pub color_error: bool,
     pub question_editing: bool,
     pub question_input: String,
+    pub plugin_error: String,
 }
 
 impl PreferencesPanel {
@@ -135,6 +149,7 @@ impl PreferencesPanel {
             color_error: false,
             question_editing: false,
             question_input: String::new(),
+            plugin_error: String::new(),
         }
     }
 
@@ -156,6 +171,7 @@ impl PreferencesPanel {
         self.color_editing = false;
         self.color_error = false;
         self.question_editing = false;
+        self.plugin_error.clear();
     }
 
     pub fn close(&mut self) {
@@ -164,6 +180,7 @@ impl PreferencesPanel {
         self.hovered_page = None;
         self.color_editing = false;
         self.question_editing = false;
+        self.plugin_error.clear();
     }
 
     pub fn height(&self) -> f32 {
@@ -236,12 +253,14 @@ impl PreferencesPanel {
             PrefPage::Plugins => match self.plugin {
                 None => {
                     for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                        let y = 139.0 + index as f32 * 89.0;
-                        add(209.0, y, 404.0, 78.0, OpenPlugin(plugin));
-                        add(620.0, y + 22.0, 84.0, 34.0, match plugin {
+                        let y = 112.0 + index as f32 * 59.0;
+                        add(209.0, y, 404.0, 54.0, OpenPlugin(plugin));
+                        add(620.0, y + 10.0, 84.0, 34.0, match plugin {
                             Plugin::Fish => ToggleFish,
                             Plugin::Starship => ToggleStarship,
                             Plugin::Tgpt => ToggleCommandHelp,
+                            Plugin::Sampler => ToggleSampler,
+                            Plugin::Yazi => ToggleYazi,
                         });
                     }
                 }
@@ -259,6 +278,17 @@ impl PreferencesPanel {
                             add(226.0, 224.0, 478.0, 38.0, EditQuestion);
                             add(590.0, 276.0, 114.0, 35.0, AskQuestion);
                             add(430.0, 349.0, 134.0, 34.0, InstallTgpt);
+                        }
+                        Plugin::Sampler => {
+                            add(620.0, 125.0, 84.0, 34.0, ToggleSampler);
+                            add(226.0, 252.0, 142.0, 34.0, OpenSampler);
+                            add(377.0, 252.0, 157.0, 34.0, InstallSampler);
+                            add(226.0, 302.0, 196.0, 34.0, EditSamplerConfig);
+                        }
+                        Plugin::Yazi => {
+                            add(620.0, 125.0, 84.0, 34.0, ToggleYazi);
+                            add(226.0, 252.0, 142.0, 34.0, OpenYazi);
+                            add(377.0, 252.0, 157.0, 34.0, InstallYazi);
                         }
                     }
                 }
@@ -378,6 +408,12 @@ mod tests {
         let fish_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleFish).unwrap();
         assert_eq!(panel.action_at(fish_card.x + 10.0, fish_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Fish)));
         assert_eq!(panel.action_at(fish_switch.x + 10.0, fish_switch.y + 10.0), Some(PrefAction::ToggleFish));
+
+        let yazi_card = buttons.iter().find(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Yazi)).unwrap();
+        let yazi_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleYazi).unwrap();
+        assert!(yazi_card.y + yazi_card.h < panel.y + panel.height());
+        assert_eq!(panel.action_at(yazi_card.x + 10.0, yazi_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Yazi)));
+        assert_eq!(panel.action_at(yazi_switch.x + 10.0, yazi_switch.y + 10.0), Some(PrefAction::ToggleYazi));
 
         panel.plugin = Some(Plugin::Tgpt);
         let buttons = panel.button_rects();
