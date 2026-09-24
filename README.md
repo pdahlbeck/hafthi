@@ -7,7 +7,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.23:** Fish, Starship, tgpt, Sampler and Yazi have their own pages in **Preferences → Plugins**. Linux/Wayland is the only supported platform.
+> **Version 0.7.24:** Fish, Starship, tgpt, Sampler and Yazi have their own pages in **Preferences → Plugins**. The Sampler and Yazi switches update immediately. Linux/Wayland is the only supported platform.
 
 ### Optional Fish and Starship
 

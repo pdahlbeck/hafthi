@@ -2092,9 +2092,11 @@ fn run() -> Result<()> {
                                 }
                                 Some(PrefAction::ToggleSampler) => {
                                     settings.use_sampler = !settings.use_sampler;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::ToggleYazi) => {
                                     settings.use_yazi = !settings.use_yazi;
+                                    gpu.apply_settings(settings.clone());
                                 }
                                 Some(PrefAction::OpenSampler | PrefAction::OpenYazi) => {
                                     let name = if action == Some(PrefAction::OpenSampler) { "sampler" } else { "yazi" };
