@@ -7,7 +7,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.25:** Terminal output is shaped when the window redraws rather than on every PTY read, reducing input lag from repeated full-screen text work. Linux/Wayland is the only supported platform.
+> **Version 0.7.26:** Full-row erase sequences now clear Sampler dashboard charts correctly when they redraw. Linux/Wayland is the only supported platform.
 
 ### Optional Fish and Starship
 
