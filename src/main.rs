@@ -764,6 +764,9 @@ impl GpuState {
                             226.0, 231.0, 478.0, 11.0, muted);
                         add("The dashboard runs local commands and checks github.com.",
                             226.0, 294.0, 478.0, 11.0, muted);
+                        if !prefs.plugin_error.is_empty() {
+                            add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
+                        }
                     }
                     Some(Plugin::Yazi) => {
                         add("FILE MANAGER", 226.0, 91.0, 300.0, 11.0, accent);
@@ -776,6 +779,9 @@ impl GpuState {
                             226.0, 231.0, 478.0, 11.0, muted);
                         add("Image previews depend on supported terminal protocols.",
                             226.0, 306.0, 478.0, 11.0, muted);
+                        if !prefs.plugin_error.is_empty() {
+                            add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
+                        }
                     }
                 },
             }
@@ -2054,6 +2060,7 @@ fn run() -> Result<()> {
                                 }
                                 Some(PrefAction::OpenPlugin(plugin)) => {
                                     preferences.plugin = Some(plugin);
+                                    preferences.plugin_error.clear();
                                     preferences.hovered = None;
                                 }
                                 Some(PrefAction::BackToPlugins) => {
@@ -2095,7 +2102,7 @@ fn run() -> Result<()> {
                                     if enabled {
                                         if let Err(error) = plugins::open_window(name) {
                                             eprintln!("Could not open {name}: {error:#}");
-                                            pty.write(format!("\r\nHafþi: Could not open {name}: {error:#}\r\n").as_bytes());
+                                            preferences.plugin_error = format!("Could not open {name}: {error}");
                                         } else {
                                             let _ = settings.save();
                                             preferences_backup = None;

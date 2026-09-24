@@ -125,6 +125,7 @@ pub struct PreferencesPanel {
     pub color_error: bool,
     pub question_editing: bool,
     pub question_input: String,
+    pub plugin_error: String,
 }
 
 impl PreferencesPanel {
@@ -148,6 +149,7 @@ impl PreferencesPanel {
             color_error: false,
             question_editing: false,
             question_input: String::new(),
+            plugin_error: String::new(),
         }
     }
 
@@ -169,6 +171,7 @@ impl PreferencesPanel {
         self.color_editing = false;
         self.color_error = false;
         self.question_editing = false;
+        self.plugin_error.clear();
     }
 
     pub fn close(&mut self) {
@@ -177,6 +180,7 @@ impl PreferencesPanel {
         self.hovered_page = None;
         self.color_editing = false;
         self.question_editing = false;
+        self.plugin_error.clear();
     }
 
     pub fn height(&self) -> f32 {
