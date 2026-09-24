@@ -1775,7 +1775,8 @@ fn run() -> Result<()> {
         match event {
             Event::UserEvent(AppEvent::PtyOutput(bytes)) => {
                 terminal.feed(&bytes);
-                gpu.update_terminal_text(&terminal);
+                // PTY reads can arrive in many small chunks. Shape the visible
+                // text once at RedrawRequested, after queued reads are fed.
                 dirty = true;
                 window.request_redraw();
             }
