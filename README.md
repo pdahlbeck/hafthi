@@ -7,7 +7,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.27:** The Yazi plugin page explains and detects Überzug++ for Wayland image previews on Hyprland and Niri. Linux/Wayland is the only supported platform.
+> **Version 0.7.28:** Micro joins the optional tools as a text editor with its own Hafþi window. Linux/Wayland is the only supported platform.
 
 ### Optional Fish and Starship
 
@@ -30,6 +30,10 @@ Open **Preferences → Plugins → tgpt** (or press **Ctrl+Shift+H**) and turn t
 Install [Sampler](https://github.com/sqshq/sampler) yourself from the AUR with `paru -S sampler` (or another AUR helper). Install [Yazi](https://github.com/sxyazi/yazi) from the Arch repositories with `sudo pacman -S --needed yazi`. On other distributions, use the appropriate packages. In **Preferences → Plugins**, turn each tool on and select **Open Sampler** or **Open Yazi**. Each runs in its own Hafþi window; closing it leaves your shell window open. The install buttons type commands at the shell prompt without running them.
 
 The first Sampler launch creates `~/.config/hafthi/sampler.yml`, a copy of the included example dashboard. **Edit dashboard…** opens it using your desktop's default handler. Your edits persist through upgrades; remove that file if you want the bundled example copied again. The dashboard runs local commands and contacts github.com for a response-time chart. Review the config before running it. Yazi opens in your home directory. For image previews on Hyprland or Niri, install [Überzug++](https://github.com/jstkdng/ueberzugpp) yourself with `sudo pacman -S --needed ueberzugpp`, restart Hafþi, and open Yazi. The Yazi plugin page shows whether it is detected. Yazi selects its Wayland adapter automatically; check with `ya env` in Hafþi if previews do not appear. Überzug++ displays the image through Wayland; Hafþi does not advertise a native terminal image protocol. For other environments, Yazi may use a different supported adapter or Chafa as a text-based fallback.
+
+### Optional Micro
+
+Install [Micro](https://github.com/micro-editor/micro) yourself on Arch with `sudo pacman -S --needed micro wl-clipboard`. The Wayland clipboard package lets Micro share copied text with other applications. Enable Micro in **Preferences → Plugins**, then choose **Open Micro** to edit in a separate Hafþi window. The install button only types the command in your shell for you to review. You can also use `micro filename` directly in the terminal; Hafþi does not change your default editor.
 
 ## Current stack
 
