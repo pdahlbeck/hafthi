@@ -29,7 +29,7 @@ pub fn ensure_sampler_config() -> Result<PathBuf> {
 
 pub fn command(name: &str) -> Result<CommandBuilder> {
     let executable = match name {
-        "sampler" | "yazi" => pty::installed_program(name)
+        "sampler" | "yazi" | "micro" => pty::installed_program(name)
             .with_context(|| format!("{name} is not installed"))?,
         _ => bail!("unknown plugin: {name}"),
     };
