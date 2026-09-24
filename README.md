@@ -51,7 +51,8 @@ Install [Micro](https://github.com/micro-editor/micro) yourself on Arch with `su
 - GPU-rendered terminal text
 - real PTY shell operation
 - optional Fish shell, Fish greeting control and Starship prompt
-- optional Sampler dashboard and Yazi file manager, launched in separate windows
+- optional tgpt command help
+- optional Sampler dashboard, Yazi file manager and Micro editor, launched in separate windows
 - ANSI 16-color, 256-color and truecolor support
 - bold text
 - GPU cursor and selection
@@ -135,7 +136,7 @@ bash run-podman.sh
 
 The first launch builds a local image from `Containerfile`; subsequent launches reuse it. After pulling new commits, rebuild it with `bash run-podman.sh --build`. Rust/Cargo are installed only in the build stage of the image, so the host does not need them. An Intel GPU is sufficient if it has working Mesa/Vulkan drivers. This needs a **Wayland** login session, a local rootless Podman installation with `crun`, and access to `/dev/dri`.
 
-The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. Optional Fish, Starship, tgpt, Sampler and Yazi must also be installed **inside the image** to work in Podman; they are not bundled.
+The launcher connects only the session's Wayland socket, D-Bus session socket (for the file picker), GPU devices, and installed fonts. Container settings are stored in `~/.local/share/hafthi-podman/config`. Shell commands run **inside the container**, with the container's files and programs, not as commands on the host. Host files are not mounted; a host file selected in the file chooser may therefore be inaccessible to Hafþi. Optional Fish, Starship, tgpt, Sampler, Yazi and Micro must also be installed **inside the image** to work in Podman; they are not bundled.
 
 ## Configuration
 
@@ -145,7 +146,7 @@ Hafþi uses:
 ~/.config/hafthi/config.ini
 ```
 
-The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback, branding and shell options. Preferences saves the shell options under `[shell]` as `use_fish`, `show_fish_greeting` and `use_starship`, and the optional Sampler and Yazi switches under `[plugins]`.
+The GPU renderer currently reads settings including font, opacity, padding, colors, ANSI palette, scrollback, branding and shell options. Preferences saves the shell options under `[shell]` as `use_fish`, `show_fish_greeting` and `use_starship`, and the optional tgpt, Sampler, Yazi and Micro switches under `[plugins]`.
 
 ## Transparency on Hyprland
 
