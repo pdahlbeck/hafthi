@@ -777,8 +777,15 @@ impl GpuState {
                             226.0, 204.0, 478.0, 12.0, muted);
                         add("Install yourself: sudo pacman -S --needed yazi",
                             226.0, 231.0, 478.0, 11.0, muted);
-                        add("Image previews depend on supported terminal protocols.",
-                            226.0, 306.0, 478.0, 11.0, muted);
+                        add("Image previews on Hyprland/Niri use Überzug++.",
+                            226.0, 278.0, 478.0, 11.0, muted);
+                        add("Install: sudo pacman -S --needed ueberzugpp",
+                            226.0, 301.0, 478.0, 11.0, muted);
+                        add(if pty::installed_program("ueberzugpp").is_some() {
+                            "Überzug++ detected"
+                        } else {
+                            "Restart Hafþi after installing Überzug++."
+                        }, 226.0, 322.0, 478.0, 11.0, muted);
                         if !prefs.plugin_error.is_empty() {
                             add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
                         }
