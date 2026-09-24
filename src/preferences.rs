@@ -26,10 +26,11 @@ pub enum Plugin {
     Tgpt,
     Sampler,
     Yazi,
+    Micro,
 }
 
 impl Plugin {
-    pub const ALL: [Self; 5] = [Self::Fish, Self::Starship, Self::Tgpt, Self::Sampler, Self::Yazi];
+    pub const ALL: [Self; 6] = [Self::Fish, Self::Starship, Self::Tgpt, Self::Sampler, Self::Yazi, Self::Micro];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -38,6 +39,7 @@ impl Plugin {
             Self::Tgpt => "tgpt",
             Self::Sampler => "Sampler",
             Self::Yazi => "Yazi",
+            Self::Micro => "Micro",
         }
     }
 
@@ -48,6 +50,7 @@ impl Plugin {
             Self::Tgpt => "https://github.com/aandrew-me/tgpt",
             Self::Sampler => "https://github.com/sqshq/sampler",
             Self::Yazi => "https://github.com/sxyazi/yazi",
+            Self::Micro => "https://github.com/micro-editor/micro",
         }
     }
 }
@@ -78,10 +81,13 @@ pub enum PrefAction {
     InstallTgpt,
     ToggleSampler,
     ToggleYazi,
+    ToggleMicro,
     OpenSampler,
     OpenYazi,
+    OpenMicro,
     InstallSampler,
     InstallYazi,
+    InstallMicro,
     EditSamplerConfig,
     ImageOff,
     ImageBanner,
@@ -253,14 +259,15 @@ impl PreferencesPanel {
             PrefPage::Plugins => match self.plugin {
                 None => {
                     for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                        let y = 112.0 + index as f32 * 59.0;
-                        add(209.0, y, 404.0, 54.0, OpenPlugin(plugin));
-                        add(620.0, y + 10.0, 84.0, 34.0, match plugin {
+                        let y = 112.0 + index as f32 * 49.0;
+                        add(209.0, y, 404.0, 44.0, OpenPlugin(plugin));
+                        add(620.0, y + 5.0, 84.0, 34.0, match plugin {
                             Plugin::Fish => ToggleFish,
                             Plugin::Starship => ToggleStarship,
                             Plugin::Tgpt => ToggleCommandHelp,
                             Plugin::Sampler => ToggleSampler,
                             Plugin::Yazi => ToggleYazi,
+                            Plugin::Micro => ToggleMicro,
                         });
                     }
                 }
@@ -289,6 +296,11 @@ impl PreferencesPanel {
                             add(620.0, 125.0, 84.0, 34.0, ToggleYazi);
                             add(226.0, 252.0, 142.0, 34.0, OpenYazi);
                             add(377.0, 252.0, 157.0, 34.0, InstallYazi);
+                        }
+                        Plugin::Micro => {
+                            add(620.0, 125.0, 84.0, 34.0, ToggleMicro);
+                            add(226.0, 252.0, 142.0, 34.0, OpenMicro);
+                            add(377.0, 252.0, 157.0, 34.0, InstallMicro);
                         }
                     }
                 }
@@ -414,6 +426,12 @@ mod tests {
         assert!(yazi_card.y + yazi_card.h < panel.y + panel.height());
         assert_eq!(panel.action_at(yazi_card.x + 10.0, yazi_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Yazi)));
         assert_eq!(panel.action_at(yazi_switch.x + 10.0, yazi_switch.y + 10.0), Some(PrefAction::ToggleYazi));
+
+        let micro_card = buttons.iter().find(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Micro)).unwrap();
+        let micro_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleMicro).unwrap();
+        assert!(micro_card.y + micro_card.h < panel.y + panel.height());
+        assert_eq!(panel.action_at(micro_card.x + 10.0, micro_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Micro)));
+        assert_eq!(panel.action_at(micro_switch.x + 10.0, micro_switch.y + 10.0), Some(PrefAction::ToggleMicro));
 
         panel.plugin = Some(Plugin::Tgpt);
         let buttons = panel.button_rects();
