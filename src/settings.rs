@@ -21,6 +21,7 @@ pub struct Settings {
     pub use_starship: bool,
     pub use_sampler: bool,
     pub use_yazi: bool,
+    pub use_micro: bool,
     pub foreground: Rgb,
     pub background: Rgb,
     pub cursor: Rgb,
@@ -53,6 +54,7 @@ impl Default for Settings {
             use_starship: true,
             use_sampler: false,
             use_yazi: false,
+            use_micro: false,
             foreground: Rgb::new(0, 0, 0),
             background: Rgb::new(246, 244, 241),
             cursor: Rgb::new(0, 0, 0),
@@ -190,6 +192,7 @@ impl Settings {
         if let Some(v) = get("shell", "use_starship") { out.use_starship = enabled(v); }
         if let Some(v) = get("plugins", "sampler") { out.use_sampler = enabled(v); }
         if let Some(v) = get("plugins", "yazi") { out.use_yazi = enabled(v); }
+        if let Some(v) = get("plugins", "micro") { out.use_micro = enabled(v); }
         if let Some(v) = get("gpu", "font_scale").and_then(|v| v.parse::<f32>().ok()) {
             out.gpu_font_scale = v.clamp(0.75, 3.0);
         }
@@ -320,6 +323,7 @@ impl Settings {
         set_key(&mut text, "shell", "use_starship", if self.use_starship { "true" } else { "false" });
         set_key(&mut text, "plugins", "sampler", if self.use_sampler { "true" } else { "false" });
         set_key(&mut text, "plugins", "yazi", if self.use_yazi { "true" } else { "false" });
+        set_key(&mut text, "plugins", "micro", if self.use_micro { "true" } else { "false" });
         set_key(&mut text, "colors", "foreground", &format!(
             "#{:02x}{:02x}{:02x}", self.foreground.r, self.foreground.g, self.foreground.b
         ));
