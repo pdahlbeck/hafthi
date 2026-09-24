@@ -390,9 +390,16 @@ impl TerminalGrid {
         self.dirty = true;
     }
 
-    fn erase_line_from_cursor(&mut self) {
-        let start = self.cursor_y * self.cols + self.cursor_x.min(self.cols);
-        let end = ((self.cursor_y + 1) * self.cols).min(self.cells.len());
+    fn erase_line(&mut self, mode: u16) {
+        let row_start = self.cursor_y * self.cols;
+        let cursor = row_start + self.cursor_x.min(self.cols.saturating_sub(1));
+        let row_end = (row_start + self.cols).min(self.cells.len());
+        let (start, end) = match mode {
+            0 => (cursor, row_end),
+            1 => (row_start, cursor.saturating_add(1).min(row_end)),
+            2 => (row_start, row_end),
+            _ => return,
+        };
         let blank = self.blank_cell();
         for cell in &mut self.cells[start..end] {
             *cell = blank;
@@ -574,7 +581,10 @@ impl Perform for TerminalGrid {
                     _ => {}
                 }
             }
-            'K' => self.erase_line_from_cursor(),
+            'K' => {
+                let mode = params.iter().next().and_then(|p| p.first()).copied().unwrap_or(0);
+                self.erase_line(mode);
+            }
             _ => return,
         }
 
@@ -627,6 +637,18 @@ mod foreground_tests {
         grid.feed(b"\x1b[2J");
         assert!(grid.cells.iter().all(|cell| cell.ch == ' '));
         assert_eq!(grid.cursor(), (2, 1));
+    }
+
+    #[test]
+    fn full_screen_dashboard_clears_entire_row_before_shorter_repaint() {
+        let fg = Rgb::new(245, 245, 245);
+        let mut grid = TerminalGrid::new_with_theme(12, 2, fg, [fg; 16], 100);
+        grid.feed(b"123456789012\x1b[1;5H\x1b[2Knew");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "    new     ");
+        assert_eq!(grid.cursor(), (7, 0));
+        grid.feed(b"\x1b[1K");
+        assert_eq!(grid.current_row(0).iter().map(|cell| cell.ch).collect::<String>(), "            ");
+        assert_eq!(grid.cursor(), (7, 0));
     }
 
     #[test]
