@@ -683,18 +683,19 @@ impl GpuState {
                 }
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
-                        add("Optional tools for your shell, prompt, files and dashboards.",
+                        add("Optional shell, prompt, editor, files and dashboards.",
                             226.0, 82.0, 478.0, 12.0, muted);
                         add("Install them yourself with pacman or an AUR helper.",
                             226.0, 100.0, 478.0, 12.0, muted);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 59.0;
+                            let y = 112.0 + index as f32 * 49.0;
                             let symbol = match plugin {
                                 Plugin::Fish => ">",
                                 Plugin::Starship => "✦",
                                 Plugin::Tgpt => "?",
                                 Plugin::Sampler => "▥",
                                 Plugin::Yazi => "▣",
+                                Plugin::Micro => "✎",
                             };
                             let status = match plugin {
                                 Plugin::Fish => if self.settings.use_fish { "Shell · enabled" } else { "Shell · disabled" },
@@ -702,11 +703,12 @@ impl GpuState {
                                 Plugin::Tgpt => if self.settings.command_help_enabled { "Command help · enabled" } else { "Command help · disabled" },
                                 Plugin::Sampler => if self.settings.use_sampler { "Dashboard · enabled" } else { "Dashboard · disabled" },
                                 Plugin::Yazi => if self.settings.use_yazi { "Files · enabled" } else { "Files · disabled" },
+                                Plugin::Micro => if self.settings.use_micro { "Editor · enabled" } else { "Editor · disabled" },
                             };
-                            add(symbol, 230.0, y + 13.0, 26.0, 20.0, accent);
-                            add(plugin.title(), 275.0, y + 4.0, 250.0, 16.0, primary);
-                            add(status, 275.0, y + 27.0, 305.0, 12.0, muted);
-                            add("›", 590.0, y + 13.0, 20.0, 20.0, muted);
+                            add(symbol, 230.0, y + 10.0, 26.0, 20.0, accent);
+                            add(plugin.title(), 275.0, y + 2.0, 250.0, 16.0, primary);
+                            add(status, 275.0, y + 22.0, 305.0, 12.0, muted);
+                            add("›", 590.0, y + 10.0, 20.0, 20.0, muted);
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -790,6 +792,19 @@ impl GpuState {
                             add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
                         }
                     }
+                    Some(Plugin::Micro) => {
+                        add("TEXT EDITOR", 226.0, 91.0, 300.0, 11.0, accent);
+                        add("Enable Micro", 226.0, 132.0, 350.0, 15.0, primary);
+                        add(if pty::installed_program("micro").is_some() { "Micro detected" } else { "Micro not installed" },
+                            226.0, 160.0, 470.0, 12.0, muted);
+                        add("Edit text in a separate Hafþi window.", 226.0, 204.0, 478.0, 12.0, muted);
+                        add("Install: sudo pacman -S --needed micro", 226.0, 231.0, 478.0, 11.0, muted);
+                        add("Wayland clipboard: sudo pacman -S --needed wl-clipboard",
+                            226.0, 304.0, 478.0, 11.0, muted);
+                        if !prefs.plugin_error.is_empty() {
+                            add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
+                        }
+                    }
                 },
             }
             for button in prefs.button_rects() {
@@ -815,10 +830,13 @@ impl GpuState {
                     PrefAction::ToggleStarship => if self.settings.use_starship { "On" } else { "Off" },
                     PrefAction::ToggleSampler => if self.settings.use_sampler { "On" } else { "Off" },
                     PrefAction::ToggleYazi => if self.settings.use_yazi { "On" } else { "Off" },
+                    PrefAction::ToggleMicro => if self.settings.use_micro { "On" } else { "Off" },
                     PrefAction::OpenSampler => "Open Sampler",
                     PrefAction::OpenYazi => "Open Yazi",
+                    PrefAction::OpenMicro => "Open Micro",
                     PrefAction::InstallSampler => "Install Sampler",
                     PrefAction::InstallYazi => "Install Yazi",
+                    PrefAction::InstallMicro => "Install Micro",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Plugins",
@@ -1102,12 +1120,12 @@ impl GpuState {
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 59.0;
+                            let y = 112.0 + index as f32 * 49.0;
                             let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
-                            shape(208.0, y - 1.0, 512.0, 56.0, 9.0, card_border);
-                            shape(209.0, y, 510.0, 54.0, 8.0,
+                            shape(208.0, y - 1.0, 512.0, 46.0, 9.0, card_border);
+                            shape(209.0, y, 510.0, 44.0, 8.0,
                                 if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
-                            shape(224.0, y + 10.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
+                            shape(224.0, y + 5.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -1128,7 +1146,7 @@ impl GpuState {
                             shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                         }
                     }
-                    Some(Plugin::Sampler | Plugin::Yazi) => {
+                    Some(Plugin::Sampler | Plugin::Yazi | Plugin::Micro) => {
                         for (y, h) in [(78.0, 103.0), (186.0, 159.0), (350.0, 52.0)] {
                             shape(208.0, y, 512.0, h, 5.0, card_border);
                             shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
@@ -1170,7 +1188,8 @@ impl GpuState {
                     || (button.action == PrefAction::ToggleFishGreeting && self.settings.show_fish_greeting)
                     || (button.action == PrefAction::ToggleStarship && self.settings.use_starship)
                     || (button.action == PrefAction::ToggleSampler && self.settings.use_sampler)
-                    || (button.action == PrefAction::ToggleYazi && self.settings.use_yazi);
+                    || (button.action == PrefAction::ToggleYazi && self.settings.use_yazi)
+                    || (button.action == PrefAction::ToggleMicro && self.settings.use_micro);
                 let hover = prefs.hovered == Some(button.action);
                 let color = if active {
                     if hover { [0.12, 0.41, 0.63, 1.0] }
@@ -1706,7 +1725,7 @@ fn run() -> Result<()> {
     let mut settings = Settings::load();
 
     let builder = WindowBuilder::new()
-        .with_title(plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", if name == "yazi" { "Yazi" } else { "Sampler" })))
+        .with_title(plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" })))
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -1730,7 +1749,7 @@ fn run() -> Result<()> {
     let mut wayland_no_blur = wayland_effect::NoBlur::attach(&window);
 
     let mut gpu = pollster::block_on(GpuState::new(window.clone(), settings.clone()))?;
-    window.set_title(&plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", if name == "yazi" { "Yazi" } else { "Sampler" })));
+    window.set_title(&plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" })));
     if wayland_no_blur.is_none() {
         eprintln!("Hafþi: ext-background-effect-v1 unavailable, using Hyprland fallback");
         request_hyprland_no_blur();
@@ -2106,9 +2125,16 @@ fn run() -> Result<()> {
                                     settings.use_yazi = !settings.use_yazi;
                                     gpu.apply_settings(settings.clone());
                                 }
-                                Some(PrefAction::OpenSampler | PrefAction::OpenYazi) => {
-                                    let name = if action == Some(PrefAction::OpenSampler) { "sampler" } else { "yazi" };
-                                    let enabled = if name == "sampler" { settings.use_sampler } else { settings.use_yazi };
+                                Some(PrefAction::ToggleMicro) => {
+                                    settings.use_micro = !settings.use_micro;
+                                    gpu.apply_settings(settings.clone());
+                                }
+                                Some(PrefAction::OpenSampler | PrefAction::OpenYazi | PrefAction::OpenMicro) => {
+                                    let (name, enabled) = match action {
+                                        Some(PrefAction::OpenSampler) => ("sampler", settings.use_sampler),
+                                        Some(PrefAction::OpenYazi) => ("yazi", settings.use_yazi),
+                                        _ => ("micro", settings.use_micro),
+                                    };
                                     if enabled {
                                         if let Err(error) = plugins::open_window(name) {
                                             eprintln!("Could not open {name}: {error:#}");
@@ -2120,10 +2146,12 @@ fn run() -> Result<()> {
                                         }
                                     }
                                 }
-                                Some(PrefAction::InstallSampler | PrefAction::InstallYazi) => {
-                                    let command: &[u8] = if action == Some(PrefAction::InstallSampler) {
-                                        b"paru -S sampler"
-                                    } else { b"sudo pacman -S --needed yazi" };
+                                Some(PrefAction::InstallSampler | PrefAction::InstallYazi | PrefAction::InstallMicro) => {
+                                    let command: &[u8] = match action {
+                                        Some(PrefAction::InstallSampler) => b"paru -S sampler",
+                                        Some(PrefAction::InstallYazi) => b"sudo pacman -S --needed yazi",
+                                        _ => b"sudo pacman -S --needed micro wl-clipboard",
+                                    };
                                     preferences.close();
                                     if let Some(original) = preferences_backup.take() {
                                         settings = original;
