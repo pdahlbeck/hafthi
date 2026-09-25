@@ -4,15 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="${PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
+GHOST_DIR="$PREFIX/libexec/hafthi"
 APP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 
 echo "Building Hafþi..."
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml"
 
-mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR"
+mkdir -p "$BIN_DIR" "$GHOST_DIR" "$APP_DIR" "$ICON_DIR"
 
 install -m 755 "$ROOT_DIR/target/release/hafthi" "$BIN_DIR/hafthi"
+install -m 755 "$ROOT_DIR/scripts/g" "$GHOST_DIR/g"
 install -m 644 "$ROOT_DIR/assets/hafthi.svg" "$ICON_DIR/hafthi.svg"
 # Desktop entries do not expand $HOME or shell-style single quotes in Exec.
 # Write the installed binary's absolute path so launchers can start it.
