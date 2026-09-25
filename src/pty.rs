@@ -1,5 +1,6 @@
 use std::{
     io::{Read, Write},
+    ffi::OsString,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
@@ -113,6 +114,7 @@ fn shell_command(settings: &Settings) -> CommandBuilder {
     // The helper lives next to the installed app, outside the user's global PATH.
     // It is available only in shells started by Hafþi.
     if let Ok(exe) = std::env::current_exe() {
+        cmd.env("HAFTHI_BIN", exe.clone());
         if let Some(bin) = exe.parent() {
             let helper_dir = bin.join("../libexec/hafthi");
             if helper_dir.join("g").is_file() {
@@ -136,6 +138,35 @@ fn shell_command(settings: &Settings) -> CommandBuilder {
     cmd.env("TERM_PROGRAM", "Hafthi");
     cmd.env("HAFTHI", "1");
     cmd
+}
+
+/// Run commands that require passwords or selections in their own terminal.
+/// Arguments are passed positionally so shell metacharacters are not evaluated.
+pub fn interactive_command(args: &[OsString]) -> Result<CommandBuilder> {
+    let name = args.first()
+        .and_then(|arg| Path::new(arg).file_name())
+        .and_then(|name| name.to_str())
+        .context("missing interactive command")?;
+    anyhow::ensure!(
+        matches!(name, "yay" | "paru" | "pacman" | "apt" | "apt-get" | "dnf" | "zypper" | "sudo" | "su" | "doas" | "pkexec"),
+        "unsupported interactive command: {name}"
+    );
+    let executable = installed_program(name)
+        .with_context(|| format!("{name} is not installed"))?;
+
+    let mut cmd = CommandBuilder::new("/bin/sh");
+    cmd.arg("-c");
+    cmd.arg("\"$@\"; result=$?; printf '\\nCommand finished (exit %s). Press Enter to close this window.\\n' \"$result\"; IFS= read -r answer; exit \"$result\"");
+    cmd.arg("hafthi-interactive");
+    cmd.arg(executable);
+    for arg in args.iter().skip(1) {
+        cmd.arg(arg.clone());
+    }
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "Hafthi");
+    cmd.env("HAFTHI", "1");
+    Ok(cmd)
 }
 
 impl PtySession {
