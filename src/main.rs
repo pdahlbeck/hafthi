@@ -967,7 +967,8 @@ impl GpuState {
                 // Clip terminal glyphs behind the opaque badge; both use the same text pass.
                 for bounds in [
                     TextBounds { left: 0, top: 0, right: self.config.width as i32, bottom: y as i32 },
-                    TextBounds { left: 0, top: y as i32, right: x as i32, bottom: self.config.height as i32 },
+                    TextBounds { left: 0, top: y as i32, right: x as i32, bottom: (y + h) as i32 },
+                    TextBounds { left: 0, top: (y + h) as i32, right: self.config.width as i32, bottom: self.config.height as i32 },
                 ] {
                     areas.push(TextArea {
                         buffer: &self.text_buffer,
@@ -979,8 +980,8 @@ impl GpuState {
                     });
                 }
                 let scale = self.settings.scale_factor.max(1.0);
-                self.ghost_buffer.set_metrics(&mut self.font_system, Metrics::new(15.0 * scale, 20.0 * scale));
-                self.ghost_buffer.set_size(&mut self.font_system, w - 8.0 * scale, h);
+                self.ghost_buffer.set_metrics(&mut self.font_system, Metrics::new(24.0 * scale, 29.0 * scale));
+                self.ghost_buffer.set_size(&mut self.font_system, w - 16.0 * scale, h);
                 self.ghost_buffer.set_text(
                     &mut self.font_system,
                     if ghost_phase { "{ö}" } else { "{-}" },
@@ -990,8 +991,8 @@ impl GpuState {
                 self.ghost_buffer.shape_until_scroll(&mut self.font_system);
                 areas.push(TextArea {
                     buffer: &self.ghost_buffer,
-                    left: x + 8.0 * scale,
-                    top: y + 3.0 * scale,
+                    left: x + 10.0 * scale,
+                    top: y + 6.0 * scale,
                     scale: 1.0,
                     bounds: TextBounds {
                         left: x as i32, top: y as i32,
@@ -2674,8 +2675,8 @@ fn run() -> Result<()> {
 
 fn ghost_badge_rect(width: u32, height: u32, scale: f32) -> Option<(f32, f32, f32, f32)> {
     let scale = scale.max(1.0);
-    if width as f32 <= 72.0 * scale || height as f32 <= 43.0 * scale {
+    if width as f32 <= 120.0 * scale || height as f32 <= 68.0 * scale {
         return None;
     }
-    Some((width as f32 - 64.0 * scale, height as f32 - 35.0 * scale, 56.0 * scale, 26.0 * scale))
+    Some((width as f32 - 106.0 * scale, 14.0 * scale, 92.0 * scale, 42.0 * scale))
 }
