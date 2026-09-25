@@ -4,6 +4,8 @@ set -euo pipefail
 PREFIX="${PREFIX:-$HOME/.local}"
 
 rm -f "$PREFIX/bin/hafthi"
+rm -f "$PREFIX/libexec/hafthi/g"
+rmdir "$PREFIX/libexec/hafthi" 2>/dev/null || true
 rm -f "$HOME/.local/share/applications/hafthi.desktop"
 rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/hafthi.svg"
 

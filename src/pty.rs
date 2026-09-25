@@ -110,6 +110,27 @@ fn shell_command(settings: &Settings) -> CommandBuilder {
     } else {
         CommandBuilder::new_default_prog()
     };
+    // The helper lives next to the installed app, outside the user's global PATH.
+    // It is available only in shells started by Hafþi.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bin) = exe.parent() {
+            let helper_dir = bin.join("../libexec/hafthi");
+            if helper_dir.join("g").is_file() {
+                let mut dirs = vec![helper_dir];
+                if let Some(path) = std::env::var_os("PATH") {
+                    dirs.extend(std::env::split_paths(&path));
+                }
+                if let Ok(path) = std::env::join_paths(dirs) {
+                    cmd.env("PATH", path);
+                }
+            }
+        }
+    }
+    if let Some(fish) = settings.use_fish.then(|| installed_program("fish")).flatten() {
+        cmd.env("HAFTHI_GHOST_SHELL", fish);
+    } else if let Some(shell) = std::env::var_os("SHELL") {
+        cmd.env("HAFTHI_GHOST_SHELL", shell);
+    }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "Hafthi");
