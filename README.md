@@ -7,7 +7,7 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.29:** Ghost Tasks run background commands with private logs and completion status. Linux/Wayland is the only supported platform.
+> **Version 0.7.30:** Ghost Tasks run background commands with private logs and completion status. Linux/Wayland is the only supported platform.
 
 ### Ghost Tasks
 
@@ -21,7 +21,7 @@ g follow job.XXXXXXXX   # Follow the log; press Ctrl+C to stop watching
 g clean                 # Remove logs for completed tasks
 ```
 
-The start message gives you the actual task ID. To run a pipeline or shell expression, quote it, e.g. `g 'make && echo done'`. Each task keeps its output, exit status and working directory separately; Hafþi shows a desktop notification when the task finishes if your system has `notify-send`. Logs are private to your user under `~/.local/state/hafthi/ghost-tasks` (or `$XDG_STATE_HOME/hafthi/ghost-tasks`). `g` is available inside Hafþi only. Commands that need a password or an interactive interface should run normally in the foreground. Tasks run in a separate process, so `g cd ...` cannot change the current shell directory.
+While a task runs, a small badge in the bottom right blinks between `{ö}` and `{-}`. It disappears when the last task finishes. The start message gives you the actual task ID. To run a pipeline or shell expression, quote it, e.g. `g 'make && echo done'`. Each task keeps its output, exit status and working directory separately; Hafþi shows a desktop notification when the task finishes if your system has `notify-send`. Logs are private to your user under `~/.local/state/hafthi/ghost-tasks` (or `$XDG_STATE_HOME/hafthi/ghost-tasks`). `g` is available inside Hafþi only. Commands that need a password or an interactive interface should run normally in the foreground. Tasks run in a separate process, so `g cd ...` cannot change the current shell directory.
 
 ### Optional Fish and Starship
 
