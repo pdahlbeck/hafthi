@@ -117,7 +117,37 @@ case ${1:-} in
         # simple quoted commands such as g 'yay -Syu'.
         first=${1%% *}
         case ${first##*/} in
-            sudo|su|doas|pkexec|ssh|yay|paru|pacman|apt|apt-get|dnf|zypper|brew|vim|nvim|nano|micro|yazi|less|top|htop)
+            yay|paru|pacman|apt|apt-get|dnf|zypper|sudo|su|doas|pkexec)
+                # These programs need an interactive PTY for passwords and
+                # package choices. Run them in a separate Hafþi window.
+                case $1 in
+                    *' '*)
+                        printf 'Write interactive arguments separately, e.g. g yay -Syu.\n' >&2
+                        exit 2
+                        ;;
+                esac
+                program=${first##*/}
+                command -v "$program" >/dev/null 2>&1 || {
+                    printf '%s is not installed.\n' "$program" >&2
+                    exit 2
+                }
+                case $0 in
+                    */*) app="${HAFTHI_BIN:-${0%/*}/../../bin/hafthi}" ;;
+                    *) app="${HAFTHI_BIN:-hafthi}" ;;
+                esac
+                [ -x "$app" ] || {
+                    printf 'Hafþi executable not found: %s\n' "$app" >&2
+                    exit 2
+                }
+                command -v setsid >/dev/null 2>&1 || {
+                    printf 'Opening an interactive window requires setsid (util-linux).\n' >&2
+                    exit 2
+                }
+                nohup setsid "$app" --interactive "$@" </dev/null >/dev/null 2>&1 &
+                printf '%s opened in a separate Hafþi window for secure input.\n' "$program"
+                exit 0
+                ;;
+            ssh|vim|nvim|nano|micro|yazi|less|top|htop)
                 printf '%s needs an interactive terminal; run it normally.\n' "$first" >&2
                 exit 2
                 ;;
