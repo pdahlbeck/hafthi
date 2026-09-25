@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R hafthi:hafthi /home/hafthi
 
 COPY --from=build /src/target/release/hafthi /usr/local/bin/hafthi
+COPY --from=build /src/scripts/g /usr/local/libexec/hafthi/g
+RUN chmod 755 /usr/local/libexec/hafthi/g
 
 USER hafthi
 ENV HOME=/home/hafthi \
