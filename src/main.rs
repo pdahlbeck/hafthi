@@ -1788,13 +1788,30 @@ fn run() -> Result<()> {
         Some(std::env::args().nth(2).context("missing plugin name")?)
     } else { None };
     let plugin_command = plugin.as_deref().map(plugins::command).transpose()?;
+    let interactive_args = if std::env::args().nth(1).as_deref() == Some("--interactive") {
+        Some(std::env::args_os().skip(2).collect::<Vec<_>>())
+    } else {
+        None
+    };
+    let interactive_command = interactive_args.as_ref()
+        .map(|args| pty::interactive_command(args))
+        .transpose()?;
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
 
     let mut settings = Settings::load();
 
+    let title = if let Some(args) = &interactive_args {
+        let name = args.first()
+            .and_then(|arg| std::path::Path::new(arg).file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("Interactive command");
+        format!("{name} — Hafþi")
+    } else {
+        plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" }))
+    };
     let builder = WindowBuilder::new()
-        .with_title(plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" })))
+        .with_title(title)
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -1832,7 +1849,7 @@ fn run() -> Result<()> {
         settings.ansi,
         settings.scrollback,
     );
-    let pty = if let Some(command) = plugin_command {
+    let pty = if let Some(command) = interactive_command.or(plugin_command) {
         PtySession::spawn_with_command(cols, rows, proxy.clone(), command)?
     } else {
         PtySession::spawn(cols, rows, proxy.clone(), &settings)?
