@@ -629,7 +629,7 @@ impl GpuState {
                     if prefs.page == page { primary } else { muted });
             }
             let heading = if prefs.page == PrefPage::Plugins {
-                prefs.plugin.map_or("Extras", Plugin::title)
+                prefs.plugin.map_or("Integrations", Plugin::title)
             } else { prefs.page.title() };
             add(heading, 213.0, 21.0, 350.0, 19.0, primary);
             match prefs.page {
@@ -839,7 +839,7 @@ impl GpuState {
                     PrefAction::InstallMicro => "Install Micro",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
-                    PrefAction::BackToPlugins => "‹ Extras",
+                    PrefAction::BackToPlugins => "‹ Integrations",
                     PrefAction::AskQuestion => "Ask tgpt",
                     PrefAction::InstallTgpt => "Install tgpt",
                     PrefAction::Cancel => "Cancel",
