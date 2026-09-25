@@ -14,7 +14,7 @@ impl PrefPage {
             Self::Appearance => "Appearance",
             Self::Terminal => "Terminal",
             Self::Background => "Background",
-            Self::Plugins => "Extras",
+            Self::Plugins => "Integrations",
         }
     }
 }
