@@ -8,6 +8,11 @@ GHOST_DIR="$PREFIX/libexec/hafthi"
 APP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 
+if ! command -v setsid >/dev/null 2>&1; then
+  echo "Ghost Tasks requires setsid (util-linux). Install it before installing Hafþi." >&2
+  exit 1
+fi
+
 echo "Building Hafþi..."
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml"
 

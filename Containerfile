@@ -11,7 +11,7 @@ RUN cargo build --release
 FROM docker.io/library/debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates fontconfig fonts-dejavu-core \
+    bash ca-certificates fontconfig fonts-dejavu-core util-linux \
     libasound2 libdbus-1-3 libfontconfig1 libudev1 \
     libvulkan1 libwayland-client0 libwayland-cursor0 libwayland-egl1 \
     libegl1 libxkbcommon0 \
