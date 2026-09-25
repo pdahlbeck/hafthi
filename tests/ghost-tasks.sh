@@ -9,12 +9,27 @@ cp scripts/g "$test_dir/g"
 chmod +x "$test_dir/g"
 g_path="$test_dir/g"
 
-# Package managers and password prompts must never start a Ghost Task.
-if "$g_path" yay > "$test_dir/rejected" 2>&1; then
-    echo 'g yay unexpectedly started' >&2
-    exit 1
-fi
-grep -q 'interactive terminal' "$test_dir/rejected"
+# Interactive commands open a separate Hafþi window with a real PTY,
+# and do not create a silent Ghost Task or touch the main terminal.
+mkdir "$test_dir/bin"
+cat > "$test_dir/bin/yay" <<'YAY'
+#!/bin/sh
+exit 0
+YAY
+cat > "$test_dir/fake-hafthi" <<'APP'
+#!/bin/sh
+printf '%s\n' "$@" > "$HAFTHI_TEST_RECORD"
+APP
+chmod +x "$test_dir/bin/yay" "$test_dir/fake-hafthi"
+HAFTHI_BIN="$test_dir/fake-hafthi" HAFTHI_TEST_RECORD="$test_dir/interactive-args" \
+    PATH="$test_dir/bin:$PATH" "$g_path" yay -Syu > "$test_dir/interactive-message"
+attempt=0
+while [ ! -f "$test_dir/interactive-args" ] && [ "$attempt" -lt 30 ]; do
+    sleep 0.1
+    attempt=$((attempt + 1))
+done
+[ "$(cat "$test_dir/interactive-args")" = "$(printf '%s\n' --interactive yay -Syu)" ]
+grep -q 'separate Hafþi window' "$test_dir/interactive-message"
 [ ! -d "$HAFTHI_GHOST_DIR/ghost1" ]
 
 # Run inside a real pseudo terminal: a nested program must not reopen /dev/tty
