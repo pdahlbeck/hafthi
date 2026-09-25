@@ -3,6 +3,7 @@ compile_error!("Hafþi currently supports Linux/Wayland only.");
 
 mod background;
 mod diagnostics;
+mod ghost_status;
 mod menu;
 mod plugins;
 mod preferences;
@@ -12,7 +13,7 @@ mod terminal;
 mod ui_theme;
 mod wayland_effect;
 
-use std::{sync::Arc, time::Instant};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{Context, Result};
 use arboard::Clipboard;
@@ -253,6 +254,7 @@ struct GpuState {
     menu_buffer: Buffer,
     menu_icon_buffer: Buffer,
     menu_shortcut_buffer: Buffer,
+    ghost_buffer: Buffer,
     rect_renderer: RectRenderer,
     background_renderer: BackgroundRenderer,
 }
@@ -392,6 +394,8 @@ impl GpuState {
         );
         menu_shortcut_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
+        let ghost_buffer = Buffer::new(&mut font_system, Metrics::new(15.0, 20.0));
+
         Ok(Self {
             surface,
             device,
@@ -408,6 +412,7 @@ impl GpuState {
             menu_buffer,
             menu_icon_buffer,
             menu_shortcut_buffer,
+            ghost_buffer,
             rect_renderer,
             background_renderer,
         })
@@ -541,6 +546,8 @@ impl GpuState {
         selection: Option<((usize, usize), (usize, usize))>,
         menu: &ContextMenu,
         prefs: &PreferencesPanel,
+        ghost_active: bool,
+        ghost_phase: bool,
     ) -> Result<()> {
         self.advance_background();
 
@@ -950,6 +957,51 @@ impl GpuState {
                 )
                 .context("failed to prepare GPU text")?;
         } else {
+            let badge = if ghost_active {
+                ghost_badge_rect(self.config.width, self.config.height, self.settings.scale_factor)
+            } else {
+                None
+            };
+            let mut areas = Vec::new();
+            if let Some((x, y, w, h)) = badge {
+                // Clip terminal glyphs behind the opaque badge; both use the same text pass.
+                for bounds in [
+                    TextBounds { left: 0, top: 0, right: self.config.width as i32, bottom: y as i32 },
+                    TextBounds { left: 0, top: y as i32, right: x as i32, bottom: self.config.height as i32 },
+                ] {
+                    areas.push(TextArea {
+                        buffer: &self.text_buffer,
+                        left: self.settings.padding,
+                        top: terminal_top(&self.settings),
+                        scale: 1.0,
+                        bounds,
+                        default_color: terminal_area.default_color,
+                    });
+                }
+                let scale = self.settings.scale_factor.max(1.0);
+                self.ghost_buffer.set_metrics(&mut self.font_system, Metrics::new(15.0 * scale, 20.0 * scale));
+                self.ghost_buffer.set_size(&mut self.font_system, w - 8.0 * scale, h);
+                self.ghost_buffer.set_text(
+                    &mut self.font_system,
+                    if ghost_phase { "{ö}" } else { "{-}" },
+                    Attrs::new().family(Family::Monospace).color(Color::rgb(121, 220, 242)),
+                    Shaping::Advanced,
+                );
+                self.ghost_buffer.shape_until_scroll(&mut self.font_system);
+                areas.push(TextArea {
+                    buffer: &self.ghost_buffer,
+                    left: x + 8.0 * scale,
+                    top: y + 3.0 * scale,
+                    scale: 1.0,
+                    bounds: TextBounds {
+                        left: x as i32, top: y as i32,
+                        right: (x + w) as i32, bottom: (y + h) as i32,
+                    },
+                    default_color: Color::rgb(121, 220, 242),
+                });
+            } else {
+                areas.push(terminal_area);
+            }
             self.text_renderer
                 .prepare(
                     &self.device,
@@ -960,7 +1012,7 @@ impl GpuState {
                         width: self.config.width,
                         height: self.config.height,
                     },
-                    [terminal_area],
+                    areas,
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
@@ -1265,6 +1317,23 @@ impl GpuState {
                         ui::DIVIDER,
                     );
                 }
+            }
+        }
+
+        if ghost_active && !prefs.visible && !menu.visible {
+            if let Some((x, y, w, h)) =
+                ghost_badge_rect(self.config.width, self.config.height, self.settings.scale_factor)
+            {
+                let scale = self.settings.scale_factor.max(1.0);
+                RectRenderer::push_rounded_rect(
+                    &mut rect_vertices, self.config.width, self.config.height,
+                    x - scale, y - scale, w + 2.0 * scale, h + 2.0 * scale,
+                    7.0 * scale, [0.20, 0.54, 0.64, 1.0],
+                );
+                RectRenderer::push_rounded_rect(
+                    &mut rect_vertices, self.config.width, self.config.height,
+                    x, y, w, h, 6.0 * scale, [0.055, 0.075, 0.09, 1.0],
+                );
             }
         }
 
@@ -1796,6 +1865,9 @@ fn run() -> Result<()> {
 
     let mut dirty = true;
     let mut modifiers = ModifiersState::empty();
+    let mut ghost_active = false;
+    let mut ghost_phase = false;
+    let mut next_ghost_poll = Instant::now();
 
     event_loop.run(move |event, elwt| {
         match event {
@@ -1842,16 +1914,39 @@ fn run() -> Result<()> {
                     no_blur.dispatch_pending();
                 }
 
-                if let Some(deadline) = gpu.background_deadline() {
-                    if deadline <= Instant::now() {
-                        dirty = true;
-                        window.request_redraw();
-                    } else {
-                        elwt.set_control_flow(ControlFlow::WaitUntil(deadline));
+                let now = Instant::now();
+                if now >= next_ghost_poll {
+                    let active = ghost_status::has_running_task();
+                    if active != ghost_active {
+                        ghost_active = active;
+                        ghost_phase = active;
+                        if !preferences.visible && !context_menu.visible {
+                            dirty = true;
+                            window.request_redraw();
+                        }
+                    } else if active {
+                        ghost_phase = !ghost_phase;
+                        if !preferences.visible && !context_menu.visible {
+                            dirty = true;
+                            window.request_redraw();
+                        }
                     }
-                } else {
-                    elwt.set_control_flow(ControlFlow::Wait);
+                    next_ghost_poll = now + if active {
+                        Duration::from_millis(600)
+                    } else {
+                        Duration::from_secs(1)
+                    };
                 }
+
+                let background_deadline = gpu.background_deadline();
+                if background_deadline.is_some_and(|deadline| deadline <= now) {
+                    dirty = true;
+                    window.request_redraw();
+                }
+                let deadline = background_deadline
+                    .filter(|deadline| *deadline > now)
+                    .map_or(next_ghost_poll, |deadline| deadline.min(next_ghost_poll));
+                elwt.set_control_flow(ControlFlow::WaitUntil(deadline));
             }
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
                 WindowEvent::CloseRequested => {
@@ -2545,7 +2640,7 @@ fn run() -> Result<()> {
                     }
 
                     if dirty {
-                        if let Err(err) = gpu.render(&terminal, selection, &context_menu, &preferences) {
+                        if let Err(err) = gpu.render(&terminal, selection, &context_menu, &preferences, ghost_active, ghost_phase) {
                             eprintln!("render error: {err:#}");
                         }
                         dirty = false;
@@ -2558,4 +2653,12 @@ fn run() -> Result<()> {
     })?;
 
     Ok(())
+}
+
+fn ghost_badge_rect(width: u32, height: u32, scale: f32) -> Option<(f32, f32, f32, f32)> {
+    let scale = scale.max(1.0);
+    if width as f32 <= 72.0 * scale || height as f32 <= 43.0 * scale {
+        return None;
+    }
+    Some((width as f32 - 64.0 * scale, height as f32 - 35.0 * scale, 56.0 * scale, 26.0 * scale))
 }
