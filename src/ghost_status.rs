@@ -19,7 +19,11 @@ pub fn has_running_task() -> bool {
 fn running_in(state: &Path) -> bool {
     let Ok(tasks) = fs::read_dir(state) else { return false };
     tasks.flatten().any(|entry| {
-        if !entry.file_name().to_string_lossy().starts_with("job.") {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let numbered = name.strip_prefix("ghost")
+            .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|digit| digit.is_ascii_digit()));
+        if !numbered && !name.starts_with("job.") {
             return false;
         }
         let path = entry.path();
@@ -44,7 +48,7 @@ mod tests {
     #[test]
     fn running_task_disappears_when_exit_is_written() {
         let state = std::env::temp_dir().join(format!("hafthi-ghost-indicator-{}", std::process::id()));
-        let task = state.join("job.TEST");
+        let task = state.join("ghost1");
         fs::create_dir_all(&task).unwrap();
         fs::write(task.join("pid"), std::process::id().to_string()).unwrap();
         assert!(running_in(&state));
