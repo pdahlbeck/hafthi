@@ -13,7 +13,7 @@ mod terminal;
 mod ui_theme;
 mod wayland_effect;
 
-use std::{sync::Arc, time::{Duration, Instant}, path::{Path, PathBuf}, ffi::OsString, fs};
+use std::{sync::Arc, time::{Duration, Instant}, path::PathBuf, ffi::OsString, fs};
 
 use anyhow::{Context, Result};
 use arboard::Clipboard;
@@ -576,6 +576,9 @@ impl GpuState {
         ghost_waiting: bool,
         ghost_drawer: Option<(&TerminalGrid, &str, f32)>,
     ) -> Result<()> {
+        if let Some((ghost, _, _)) = ghost_drawer {
+            self.update_ghost_text(ghost);
+        }
         self.advance_background();
 
         if menu.visible {
@@ -985,7 +988,6 @@ impl GpuState {
                 .context("failed to prepare GPU text")?;
         } else if let Some((ghost, id, progress)) = ghost_drawer.filter(|(_, _, progress)| *progress > 0.0) {
             let visible_height = ghost_drawer_height(self.config.height) * progress;
-            self.update_ghost_text(ghost);
             self.ghost_title_buffer.set_size(&mut self.font_system, self.config.width as f32 - 42.0, 30.0);
             let title = format!("Ghost Task {id}    Ctrl+G to return{} {}",
                 if ghost_waiting { "   INPUT NEEDED" } else { "" },
