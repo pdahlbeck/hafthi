@@ -986,7 +986,7 @@ impl GpuState {
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
-        } else if let Some((ghost, id, progress)) = ghost_drawer.filter(|(_, _, progress)| *progress > 0.0) {
+        } else if let Some((_, id, progress)) = ghost_drawer.filter(|(_, _, progress)| *progress > 0.0) {
             let visible_height = ghost_drawer_height(self.config.height) * progress;
             self.ghost_title_buffer.set_size(&mut self.font_system, self.config.width as f32 - 42.0, 30.0);
             let title = format!("Ghost Task {id}    Ctrl+G to return{} {}",
