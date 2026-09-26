@@ -5,9 +5,9 @@
 
 **Hafþi is a GPU-accelerated terminal emulator for Linux/Wayland, written in Rust and rendered with wgpu.**
 
-Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
+The name Hafþi comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.36:** Ghost Tasks run background commands with private logs and completion status. Linux/Wayland is the only supported platform.
+> **Version 0.7.36:** Ghost Tasks run commands in background terminal sessions and let you answer delayed questions in a slide-down drawer. Linux/Wayland is the supported platform.
 
 ### Ghost Tasks
 
@@ -16,13 +16,14 @@ Prefix a command with `g` to run it in the background without its output interru
 ```sh
 g make -j4
 g yay -Syu
+# All commands started with g can ask for input later
 g jobs
 g log ghost1
 g follow ghost1   # Follow the log; press Ctrl+C to stop watching
 g clean                 # Remove logs for completed tasks
 ```
 
-Every new task gets its own PTY in the originating Hafþi window. If a command requests input immediately or after running for a while, press **Ctrl+G** to slide its drawer down and answer there. Press **Ctrl+G** again to hide the drawer while the task keeps running; the normal shell stays available. The badge at the upper right blinks between `{ö}` and `{-}`, and may flash `{?}` in amber when output looks like a prompt. Prompt detection is a hint; Ctrl+G works at any time. Input to the drawer, including passwords, never goes to the normal shell.
+Every new task gets its own PTY in the originating Hafþi window. Any command started with `g` can request input, including passwords, confirmations and other questions, immediately or after running for a while. Press **Ctrl+G** to slide its drawer down and answer there. Press **Ctrl+G** again to hide the drawer while the task keeps running; the normal shell stays available. The badge at the upper right blinks between `{ö}` and `{-}`, and may flash `{?}` in amber when output looks like a prompt. Prompt detection is a hint; Ctrl+G works at any time. Input to the drawer, including passwords, never goes to the normal shell.
 
 Tasks are numbered `ghost1`, `ghost2`, and so on. `g jobs` shows status and `g log ID` shows captured output. The drawer shows the most recently started task; use `g log ID` for earlier jobs. Quote pipelines or expressions, for example `g 'make && echo done'`. Each job runs in the directory where it started, so `g cd ...` cannot change the current shell directory. Logs and exit codes are private to your account under `~/.local/state/hafthi/ghost-tasks` (or `$XDG_STATE_HOME/hafthi/ghost-tasks`). Use `g clean` to remove completed logs. Hafþi sends a completion notification when `notify-send` is available. The `g` helper is available inside Hafþi.
 
