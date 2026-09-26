@@ -2,6 +2,7 @@ use std::{
     io::{Read, Write},
     ffi::OsString,
     path::{Path, PathBuf},
+    fs::OpenOptions,
     sync::{Arc, Mutex},
     thread,
 };
@@ -16,6 +17,8 @@ use winit::event_loop::EventLoopProxy;
 pub enum AppEvent {
     PtyOutput(Vec<u8>),
     PtyExited,
+    GhostOutput(String, Vec<u8>),
+    GhostExited(String, i32),
     ImageChosen(Option<String>),
 }
 
@@ -95,7 +98,7 @@ fn fish_init(settings: &Settings, starship: Option<&Path>) -> String {
     commands.join("; ")
 }
 
-fn shell_command(settings: &Settings) -> CommandBuilder {
+fn shell_command(settings: &Settings, ghost_inbox: &Path, ghost_state: &Path) -> CommandBuilder {
     let fish = settings.use_fish.then(|| installed_program("fish")).flatten();
     // A graphical launcher may omit SHELL. portable-pty resolves the account
     // shell when Fish is absent or the user disables it in Preferences.
@@ -137,12 +140,14 @@ fn shell_command(settings: &Settings) -> CommandBuilder {
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "Hafthi");
     cmd.env("HAFTHI", "1");
+    cmd.env("HAFTHI_GHOST_INBOX", ghost_inbox);
+    cmd.env("HAFTHI_GHOST_DIR", ghost_state);
     cmd
 }
 
 /// Run commands that require passwords or selections in their own terminal.
 /// Arguments are passed positionally so shell metacharacters are not evaluated.
-pub fn interactive_command(args: &[OsString]) -> Result<CommandBuilder> {
+pub fn interactive_command(args: &[OsString], drawer: bool) -> Result<CommandBuilder> {
     let name = args.first()
         .and_then(|arg| Path::new(arg).file_name())
         .and_then(|name| name.to_str())
@@ -156,7 +161,11 @@ pub fn interactive_command(args: &[OsString]) -> Result<CommandBuilder> {
 
     let mut cmd = CommandBuilder::new("/bin/sh");
     cmd.arg("-c");
-    cmd.arg("\"$@\"; result=$?; printf '\\nCommand finished (exit %s). Press Enter to close this window.\\n' \"$result\"; IFS= read -r answer; exit \"$result\"");
+    cmd.arg(if drawer {
+        "\"$@\"; result=$?; printf '\\nCommand finished (exit %s). Press Ctrl+G to return to your shell.\\n' \"$result\"; exit \"$result\""
+    } else {
+        "\"$@\"; result=$?; printf '\\nCommand finished (exit %s). Press Enter to close this window.\\n' \"$result\"; IFS= read -r answer; exit \"$result\""
+    });
     cmd.arg("hafthi-interactive");
     cmd.arg(executable);
     for arg in args.iter().skip(1) {
@@ -170,11 +179,21 @@ pub fn interactive_command(args: &[OsString]) -> Result<CommandBuilder> {
 }
 
 impl PtySession {
-    pub fn spawn(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, settings: &Settings) -> Result<Self> {
-        Self::spawn_with_command(cols, rows, proxy, shell_command(settings))
+    pub fn spawn(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, settings: &Settings, inbox: &Path, state: &Path) -> Result<Self> {
+        Self::spawn_with_command(cols, rows, proxy, shell_command(settings, inbox, state))
     }
 
     pub fn spawn_with_command(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, command: CommandBuilder) -> Result<Self> {
+        Self::spawn_inner(cols, rows, proxy, command, None)
+    }
+
+    pub fn spawn_ghost(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, args: &[OsString], cwd: &Path, id: String, task_dir: PathBuf) -> Result<Self> {
+        let mut command = interactive_command(args, true)?;
+        command.cwd(cwd);
+        Self::spawn_inner(cols, rows, proxy, command, Some((id, task_dir)))
+    }
+
+    fn spawn_inner(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, command: CommandBuilder, ghost: Option<(String, PathBuf)>) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -189,6 +208,9 @@ impl PtySession {
             .slave
             .spawn_command(command)
             .context("failed to spawn process in PTY")?;
+        if let Some((_, dir)) = &ghost {
+            let _ = std::fs::write(dir.join("pid"), std::process::id().to_string());
+        }
 
         drop(pair.slave);
 
@@ -204,6 +226,7 @@ impl PtySession {
 
         let reader_proxy = proxy.clone();
         let query_writer = Arc::clone(&writer);
+        let mut log = ghost.as_ref().and_then(|(_, dir)| OpenOptions::new().append(true).open(dir.join("output")).ok());
         thread::spawn(move || {
             let mut primary_device_query = PrimaryDeviceQuery::default();
             let mut buf = [0u8; 8192];
@@ -218,10 +241,15 @@ impl PtySession {
                                 let _ = output.flush();
                             }
                         }
-                        if reader_proxy
-                            .send_event(AppEvent::PtyOutput(buf[..n].to_vec()))
-                            .is_err()
-                        {
+                        if let Some(file) = log.as_mut() {
+                            let _ = file.write_all(&buf[..n]);
+                        }
+                        let event = if let Some((id, _)) = &ghost {
+                            AppEvent::GhostOutput(id.clone(), buf[..n].to_vec())
+                        } else {
+                            AppEvent::PtyOutput(buf[..n].to_vec())
+                        };
+                        if reader_proxy.send_event(event).is_err() {
                             return;
                         }
                     }
@@ -229,11 +257,23 @@ impl PtySession {
                 }
             }
 
-            match child.wait() {
-                Ok(status) => diagnostics::record(&format!("PTY child status: {status:?}")),
-                Err(err) => diagnostics::record(&format!("PTY child wait error: {err:#}")),
+            let code = match child.wait() {
+                Ok(status) => {
+                    diagnostics::record(&format!("PTY child status: {status:?}"));
+                    status.exit_code() as i32
+                }
+                Err(err) => {
+                    diagnostics::record(&format!("PTY child wait error: {err:#}"));
+                    1
+                }
+            };
+            if let Some((id, dir)) = ghost {
+                let _ = std::fs::write(dir.join("exit.tmp"), code.to_string());
+                let _ = std::fs::rename(dir.join("exit.tmp"), dir.join("exit"));
+                let _ = reader_proxy.send_event(AppEvent::GhostExited(id, code));
+            } else {
+                let _ = reader_proxy.send_event(AppEvent::PtyExited);
             }
-            let _ = reader_proxy.send_event(AppEvent::PtyExited);
         });
 
         Ok(Self {
@@ -284,7 +324,7 @@ mod tests {
             .expect("open PTY");
         let mut settings = Settings::default();
         settings.use_fish = false;
-        let mut command = shell_command(&settings);
+        let mut command = shell_command(&settings, Path::new("/tmp"), Path::new("/tmp"));
         command.env_remove("SHELL");
         let mut child = pair
             .slave

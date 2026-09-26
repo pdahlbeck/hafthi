@@ -13,7 +13,7 @@ mod terminal;
 mod ui_theme;
 mod wayland_effect;
 
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, time::{Duration, Instant}, path::PathBuf, ffi::OsString, fs};
 
 use anyhow::{Context, Result};
 use arboard::Clipboard;
@@ -255,6 +255,8 @@ struct GpuState {
     menu_icon_buffer: Buffer,
     menu_shortcut_buffer: Buffer,
     ghost_buffer: Buffer,
+    ghost_terminal_buffer: Buffer,
+    ghost_title_buffer: Buffer,
     rect_renderer: RectRenderer,
     background_renderer: BackgroundRenderer,
 }
@@ -394,7 +396,10 @@ impl GpuState {
         );
         menu_shortcut_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
 
-        let ghost_buffer = Buffer::new(&mut font_system, Metrics::new(15.0, 20.0));
+        let ghost_buffer = Buffer::new(&mut font_system, Metrics::new(24.0, 29.0));
+        let mut ghost_terminal_buffer = Buffer::new(&mut font_system, Metrics::new(settings.font_size, settings.line_height));
+        ghost_terminal_buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
+        let ghost_title_buffer = Buffer::new(&mut font_system, Metrics::new(18.0, 24.0));
 
         Ok(Self {
             surface,
@@ -413,6 +418,8 @@ impl GpuState {
             menu_icon_buffer,
             menu_shortcut_buffer,
             ghost_buffer,
+            ghost_terminal_buffer,
+            ghost_title_buffer,
             rect_renderer,
             background_renderer,
         })
@@ -437,6 +444,8 @@ impl GpuState {
         self.config.height = size.height;
         self.surface.configure(&self.device, &self.config);
         self.text_buffer
+            .set_size(&mut self.font_system, size.width as f32, size.height as f32);
+        self.ghost_terminal_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
         self.menu_buffer
             .set_size(&mut self.font_system, size.width as f32, size.height as f32);
@@ -481,6 +490,7 @@ impl GpuState {
             &mut self.font_system,
             Metrics::new(font_size, line_height),
         );
+        self.ghost_terminal_buffer.set_metrics(&mut self.font_system, Metrics::new(font_size, line_height));
         self.menu_buffer.set_metrics(
             &mut self.font_system,
             Metrics::new(menu_font_size, menu_line_height),
@@ -532,6 +542,21 @@ impl GpuState {
         self.text_buffer.shape_until_scroll(&mut self.font_system);
     }
 
+    fn update_ghost_text(&mut self, terminal: &TerminalGrid) {
+        let runs = terminal.styled_runs();
+        self.ghost_terminal_buffer.set_rich_text(
+            &mut self.font_system,
+            runs.iter().map(|(text, style)| {
+                (text.as_str(), Attrs::new()
+                    .family(Family::Name(&self.settings.font_family))
+                    .color(Color::rgb(style.fg.r, style.fg.g, style.fg.b))
+                    .weight(if style.bold { Weight::BOLD } else { Weight::NORMAL }))
+            }),
+            Shaping::Advanced,
+        );
+        self.ghost_terminal_buffer.shape_until_scroll(&mut self.font_system);
+    }
+
     fn glyph_x(&self, row: usize, col: usize, after: bool) -> f32 {
         self.text_buffer.layout_runs()
             .find(|run| run.line_i == row)
@@ -548,7 +573,12 @@ impl GpuState {
         prefs: &PreferencesPanel,
         ghost_active: bool,
         ghost_phase: bool,
+        ghost_waiting: bool,
+        ghost_drawer: Option<(&TerminalGrid, &str, f32)>,
     ) -> Result<()> {
+        if let Some((ghost, _, _)) = ghost_drawer {
+            self.update_ghost_text(ghost);
+        }
         self.advance_background();
 
         if menu.visible {
@@ -956,6 +986,28 @@ impl GpuState {
                     &mut self.swash_cache,
                 )
                 .context("failed to prepare GPU text")?;
+        } else if let Some((ghost, id, progress)) = ghost_drawer.filter(|(_, _, progress)| *progress > 0.0) {
+            let visible_height = ghost_drawer_height(self.config.height) * progress;
+            self.ghost_title_buffer.set_size(&mut self.font_system, self.config.width as f32 - 42.0, 30.0);
+            let title = format!("Ghost Task {id}    Ctrl+G to return{} {}",
+                if ghost_waiting { "   INPUT NEEDED" } else { "" },
+                if ghost_waiting && ghost_phase { "{?}" } else { "{ö}" });
+            self.ghost_title_buffer.set_text(&mut self.font_system, &title,
+                Attrs::new().family(Family::Monospace).color(if ghost_waiting { Color::rgb(255, 202, 105) } else { Color::rgb(121, 220, 242) }),
+                Shaping::Advanced);
+            self.ghost_title_buffer.shape_until_scroll(&mut self.font_system);
+            let area_color = terminal_area.default_color;
+            let areas = [
+                TextArea { buffer: &self.text_buffer, left: self.settings.padding, top: terminal_top(&self.settings), scale: 1.0,
+                    bounds: TextBounds { left: 0, top: visible_height.ceil() as i32 + 8, right: self.config.width as i32, bottom: self.config.height as i32 }, default_color: area_color },
+                TextArea { buffer: &self.ghost_title_buffer, left: 20.0, top: 16.0, scale: 1.0,
+                    bounds: TextBounds { left: 16, top: 12, right: self.config.width as i32 - 16, bottom: visible_height.min(46.0) as i32 }, default_color: Color::rgb(121, 220, 242) },
+                TextArea { buffer: &self.ghost_terminal_buffer, left: self.settings.padding + 12.0, top: 56.0, scale: 1.0,
+                    bounds: TextBounds { left: 16, top: 52, right: self.config.width as i32 - 16, bottom: visible_height as i32 }, default_color: area_color },
+            ];
+            self.text_renderer.prepare(&self.device, &self.queue, &mut self.font_system, &mut self.atlas,
+                Resolution { width: self.config.width, height: self.config.height }, areas, &mut self.swash_cache)
+                .context("failed to prepare Ghost Task drawer text")?;
         } else {
             let badge = if ghost_active {
                 ghost_badge_rect(self.config.width, self.config.height, self.settings.scale_factor)
@@ -984,8 +1036,9 @@ impl GpuState {
                 self.ghost_buffer.set_size(&mut self.font_system, w - 16.0 * scale, h);
                 self.ghost_buffer.set_text(
                     &mut self.font_system,
-                    if ghost_phase { "{ö}" } else { "{-}" },
-                    Attrs::new().family(Family::Monospace).color(Color::rgb(121, 220, 242)),
+                    if ghost_waiting { if ghost_phase { "{?}" } else { "   " } }
+                    else if ghost_phase { "{ö}" } else { "{-}" },
+                    Attrs::new().family(Family::Monospace).color(if ghost_waiting { Color::rgb(255, 202, 105) } else { Color::rgb(121, 220, 242) }),
                     Shaping::Advanced,
                 );
                 self.ghost_buffer.shape_until_scroll(&mut self.font_system);
@@ -1321,7 +1374,17 @@ impl GpuState {
             }
         }
 
-        if ghost_active && !prefs.visible && !menu.visible {
+        if let Some((_, _, progress)) = ghost_drawer.filter(|(_, _, progress)| *progress > 0.0) {
+            let visible_height = ghost_drawer_height(self.config.height) * progress;
+            RectRenderer::push_rounded_rect(&mut rect_vertices, self.config.width, self.config.height,
+                7.0, 7.0, self.config.width as f32 - 14.0, visible_height,
+                10.0, [0.21, 0.55, 0.67, 1.0]);
+            RectRenderer::push_rounded_rect(&mut rect_vertices, self.config.width, self.config.height,
+                9.0, 9.0, self.config.width as f32 - 18.0, (visible_height - 4.0).max(0.0),
+                9.0, [0.055, 0.075, 0.09, 0.99]);
+        }
+
+        if ghost_active && ghost_drawer.is_none() && !prefs.visible && !menu.visible {
             if let Some((x, y, w, h)) =
                 ghost_badge_rect(self.config.width, self.config.height, self.settings.scale_factor)
             {
@@ -1329,7 +1392,7 @@ impl GpuState {
                 RectRenderer::push_rounded_rect(
                     &mut rect_vertices, self.config.width, self.config.height,
                     x - scale, y - scale, w + 2.0 * scale, h + 2.0 * scale,
-                    7.0 * scale, [0.20, 0.54, 0.64, 1.0],
+                    7.0 * scale, if ghost_waiting { [0.85, 0.55, 0.18, 1.0] } else { [0.20, 0.54, 0.64, 1.0] },
                 );
                 RectRenderer::push_rounded_rect(
                     &mut rect_vertices, self.config.width, self.config.height,
@@ -1784,6 +1847,36 @@ mod command_help_tests {
     }
 }
 
+struct GhostSession {
+    id: String,
+    pty: PtySession,
+    terminal: TerminalGrid,
+    last_output: Instant,
+    tail: String,
+    exited: bool,
+}
+
+fn ghost_needs_input(job: &GhostSession, now: Instant) -> bool {
+    if job.exited || now.duration_since(job.last_output) < Duration::from_millis(700) {
+        return false;
+    }
+    let last = job.tail.trim_end().rsplit('\n').next().unwrap_or("").trim_end();
+    last.ends_with(':') || last.ends_with('?') || last.ends_with(']')
+}
+
+fn stop_ghost_jobs(jobs: &[GhostSession], state: &std::path::Path, inbox: &std::path::Path) {
+    for job in jobs.iter().filter(|job| !job.exited) {
+        let _ = fs::write(state.join(&job.id).join("exit"), "130\n");
+    }
+    let _ = fs::remove_dir_all(inbox);
+}
+
+fn ghost_grid_size(size: PhysicalSize<u32>, settings: &Settings) -> (u16, u16) {
+    let cols = ((size.width as f32 - settings.padding * 2.0 - 24.0) / settings.cell_width).floor().max(1.0) as u16;
+    let rows = ((ghost_drawer_height(size.height) - 72.0) / settings.line_height).floor().max(1.0) as u16;
+    (cols, rows)
+}
+
 fn run() -> Result<()> {
     let plugin = if std::env::args().nth(1).as_deref() == Some("--plugin") {
         Some(std::env::args().nth(2).context("missing plugin name")?)
@@ -1795,7 +1888,7 @@ fn run() -> Result<()> {
         None
     };
     let interactive_command = interactive_args.as_ref()
-        .map(|args| pty::interactive_command(args))
+        .map(|args| pty::interactive_command(args, false))
         .transpose()?;
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
@@ -1842,6 +1935,18 @@ fn run() -> Result<()> {
         request_hyprland_no_blur();
     }
 
+    let ghost_state = std::env::var_os("HAFTHI_GHOST_DIR").map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_STATE_HOME").map(|p| PathBuf::from(p).join("hafthi/ghost-tasks")))
+        .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/state/hafthi/ghost-tasks")))
+        .context("HOME is not set; cannot create Ghost Tasks state")?;
+    fs::create_dir_all(&ghost_state)?;
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&ghost_state, fs::Permissions::from_mode(0o700))?;
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let ghost_inbox = ghost_state.join(format!("inbox-{}-{nonce}", std::process::id()));
+    fs::create_dir_all(&ghost_inbox)?;
+    fs::set_permissions(&ghost_inbox, fs::Permissions::from_mode(0o700))?;
+
     let (cols, rows) = grid_size(window.inner_size(), &settings);
     let mut terminal = TerminalGrid::new_with_theme(
         cols as usize,
@@ -1853,7 +1958,7 @@ fn run() -> Result<()> {
     let pty = if let Some(command) = interactive_command.or(plugin_command) {
         PtySession::spawn_with_command(cols, rows, proxy.clone(), command)?
     } else {
-        PtySession::spawn(cols, rows, proxy.clone(), &settings)?
+        PtySession::spawn(cols, rows, proxy.clone(), &settings, &ghost_inbox, &ghost_state)?
     };
 
     let mut selection: Option<((usize, usize), (usize, usize))> = None;
@@ -1886,6 +1991,11 @@ fn run() -> Result<()> {
     let mut ghost_active = false;
     let mut ghost_phase = false;
     let mut next_ghost_poll = Instant::now();
+    let mut next_inbox_poll = Instant::now();
+    let mut ghost_sessions: Vec<GhostSession> = Vec::new();
+    let mut ghost_selected: Option<String> = None;
+    let mut ghost_target = false;
+    let mut ghost_progress = 0.0_f32;
 
     event_loop.run(move |event, elwt| {
         match event {
@@ -1896,8 +2006,30 @@ fn run() -> Result<()> {
                 dirty = true;
                 window.request_redraw();
             }
+            Event::UserEvent(AppEvent::GhostOutput(id, bytes)) => {
+                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.id == id) {
+                    job.terminal.feed(&bytes);
+                    job.last_output = Instant::now();
+                    job.tail.push_str(&String::from_utf8_lossy(&bytes));
+                    if job.tail.len() > 2048 {
+                        job.tail = job.tail.chars().rev().take(512).collect::<String>().chars().rev().collect();
+                    }
+                    if ghost_target && ghost_selected.as_deref() == Some(id.as_str()) {
+                        dirty = true;
+                        window.request_redraw();
+                    }
+                }
+            }
+            Event::UserEvent(AppEvent::GhostExited(id, _code)) => {
+                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.id == id) {
+                    job.exited = true;
+                }
+                dirty = true;
+                window.request_redraw();
+            }
             Event::UserEvent(AppEvent::PtyExited) => {
                 diagnostics::record("PTY shell exited; closing window");
+                stop_ghost_jobs(&ghost_sessions, &ghost_state, &ghost_inbox);
                 elwt.exit();
             }
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
@@ -1933,6 +2065,54 @@ fn run() -> Result<()> {
                 }
 
                 let now = Instant::now();
+                if now >= next_inbox_poll {
+                    if let Ok(entries) = fs::read_dir(&ghost_inbox) {
+                        for entry in entries.flatten() {
+                            let id = entry.file_name().to_string_lossy().to_string();
+                            if !id.strip_prefix("ghost").is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|digit| digit.is_ascii_digit())) {
+                                continue;
+                            }
+                            let request = fs::read(entry.path());
+                            let _ = fs::remove_file(entry.path());
+                            let task_dir = ghost_state.join(&id);
+                            let result = (|| -> Result<GhostSession> {
+                                let data = request?;
+                                anyhow::ensure!(data.len() < 65536 && data.last() == Some(&0), "invalid Ghost Task request");
+                                let mut parts = data[..data.len() - 1].split(|byte| *byte == 0);
+                                let cwd = PathBuf::from(String::from_utf8(parts.next().context("missing working directory")?.to_vec())?);
+                                let args = parts.map(|part| String::from_utf8(part.to_vec()).map(OsString::from))
+                                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                                anyhow::ensure!(!args.is_empty(), "missing Ghost Task command");
+                                let (ghost_cols, ghost_rows) = ghost_grid_size(window.inner_size(), &settings);
+                                let ghost_pty = PtySession::spawn_ghost(ghost_cols, ghost_rows, proxy.clone(), &args, &cwd, id.clone(), task_dir.clone())?;
+                                let grid = TerminalGrid::new_with_theme(ghost_cols as usize, ghost_rows as usize,
+                                    settings.foreground, settings.ansi, settings.scrollback);
+                                Ok(GhostSession { id: id.clone(), pty: ghost_pty, terminal: grid,
+                                    last_output: Instant::now(), tail: String::new(), exited: false })
+                            })();
+                            match result {
+                                Ok(job) => {
+                                    ghost_selected = Some(id);
+                                    ghost_sessions.push(job);
+                                    ghost_active = true;
+                                    dirty = true;
+                                    window.request_redraw();
+                                }
+                                Err(err) => {
+                                    let _ = fs::write(task_dir.join("output"), format!("Ghost Task could not start: {err:#}\n"));
+                                    let _ = fs::write(task_dir.join("exit"), "1\n");
+                                }
+                            }
+                        }
+                    }
+                    next_inbox_poll = now + Duration::from_millis(180);
+                }
+                let next_progress = if ghost_target { (ghost_progress + 0.14).min(1.0) } else { (ghost_progress - 0.14).max(0.0) };
+                if (next_progress - ghost_progress).abs() > f32::EPSILON {
+                    ghost_progress = next_progress;
+                    dirty = true;
+                    window.request_redraw();
+                }
                 if now >= next_ghost_poll {
                     let active = ghost_status::has_running_task();
                     if active != ghost_active {
@@ -1963,12 +2143,17 @@ fn run() -> Result<()> {
                 }
                 let deadline = background_deadline
                     .filter(|deadline| *deadline > now)
-                    .map_or(next_ghost_poll, |deadline| deadline.min(next_ghost_poll));
+                    .map_or(next_ghost_poll, |deadline| deadline.min(next_ghost_poll))
+                    .min(next_inbox_poll);
+                let deadline = if ghost_progress > 0.0 && ghost_progress < 1.0 {
+                    deadline.min(now + Duration::from_millis(16))
+                } else { deadline };
                 elwt.set_control_flow(ControlFlow::WaitUntil(deadline));
             }
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
                 WindowEvent::CloseRequested => {
                     diagnostics::record("window close requested");
+                    stop_ghost_jobs(&ghost_sessions, &ghost_state, &ghost_inbox);
                     elwt.exit();
                 }
                 WindowEvent::ModifiersChanged(new_modifiers) => {
@@ -1976,6 +2161,42 @@ fn run() -> Result<()> {
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
                     if event.state == ElementState::Pressed {
+                        if !preferences.visible && !modifiers.shift_key() && modifiers.control_key()
+                            && matches!(&event.logical_key, Key::Character(ch) if ch.eq_ignore_ascii_case("g")) {
+                            if !ghost_sessions.is_empty() {
+                                ghost_target = !ghost_target;
+                                if ghost_target {
+                                    ghost_selected = ghost_sessions.last().map(|job| job.id.clone());
+                                    context_menu.close();
+                                    selection = None;
+                                }
+                                dirty = true;
+                                window.request_redraw();
+                                return;
+                            }
+                        }
+                        if ghost_target {
+                            if event.logical_key == Key::Named(NamedKey::Escape) {
+                                ghost_target = false;
+                                dirty = true;
+                                window.request_redraw();
+                                return;
+                            }
+                            if let Some(job) = ghost_sessions.iter_mut().find(|job| Some(job.id.as_str()) == ghost_selected.as_deref()) {
+                                if modifiers.control_key() && modifiers.shift_key()
+                                    && matches!(&event.logical_key, Key::Character(ch) if ch.eq_ignore_ascii_case("v")) {
+                                    if let Some(text) = clipboard_text(clipboard.as_mut(), &recent_copy) {
+                                        job.pty.write(text.as_bytes());
+                                    }
+                                } else {
+                                    job.terminal.scroll_to_bottom();
+                                    send_key(&job.pty, &event.logical_key, event.text.as_deref(), modifiers);
+                                }
+                            }
+                            dirty = true;
+                            window.request_redraw();
+                            return;
+                        }
                         if preferences.visible {
                             if preferences.question_editing {
                                 match &event.logical_key {
@@ -2165,7 +2386,7 @@ fn run() -> Result<()> {
                     button: MouseButton::Right,
                     ..
                 } => {
-                    if preferences.visible {
+                    if preferences.visible || ghost_target {
                         return;
                     }
                     selecting = false;
@@ -2186,6 +2407,7 @@ fn run() -> Result<()> {
                     button: MouseButton::Left,
                     ..
                 } => {
+                    if ghost_target { return; }
                     if preferences.visible {
                         if state == ElementState::Pressed {
                             let action = preferences
@@ -2605,6 +2827,18 @@ fn run() -> Result<()> {
                     }
                 }
                 WindowEvent::MouseWheel { delta, .. } => {
+                    if ghost_target {
+                        let rows = match delta {
+                            MouseScrollDelta::LineDelta(_, y) => if y > 0.0 { 3 } else { -3 },
+                            MouseScrollDelta::PixelDelta(pos) => if pos.y > 0.0 { 3 } else { -3 },
+                        };
+                        if let Some(job) = ghost_sessions.iter_mut().find(|job| Some(job.id.as_str()) == ghost_selected.as_deref()) {
+                            job.terminal.scroll_view(rows);
+                        }
+                        dirty = true;
+                        window.request_redraw();
+                        return;
+                    }
                     if preferences.visible {
                         return;
                     }
@@ -2636,6 +2870,12 @@ fn run() -> Result<()> {
                     }
 
                     let (cols, rows) = grid_size(size, &settings);
+                    let (ghost_cols, ghost_rows) = ghost_grid_size(size, &settings);
+                    for job in &mut ghost_sessions {
+                        job.terminal.resize(ghost_cols as usize, ghost_rows as usize);
+                        job.pty.resize(ghost_cols, ghost_rows, size.width.min(u16::MAX as u32) as u16,
+                            (ghost_drawer_height(size.height) as u32).min(u16::MAX as u32) as u16);
+                    }
                     let (old_cols, old_rows) = terminal.dimensions();
                     if cols as usize != old_cols || rows as usize != old_rows {
                         terminal.resize(cols as usize, rows as usize);
@@ -2652,13 +2892,22 @@ fn run() -> Result<()> {
                     window.request_redraw();
                 }
                 WindowEvent::RedrawRequested => {
+                    if ghost_target && ghost_sessions.iter_mut().any(|job| job.terminal.take_dirty()) {
+                        dirty = true;
+                    }
                     if terminal.take_dirty() {
                         gpu.update_terminal_text(&terminal);
                         dirty = true;
                     }
 
                     if dirty {
-                        if let Err(err) = gpu.render(&terminal, selection, &context_menu, &preferences, ghost_active, ghost_phase) {
+                        let ghost_drawer = if ghost_progress > 0.0 {
+                            ghost_sessions.iter().find(|job| Some(job.id.as_str()) == ghost_selected.as_deref())
+                                .map(|job| (&job.terminal, job.id.as_str(), ghost_progress))
+                        } else { None };
+                        let ghost_waiting = ghost_sessions.iter().find(|job| Some(job.id.as_str()) == ghost_selected.as_deref())
+                            .is_some_and(|job| ghost_needs_input(job, Instant::now()));
+                        if let Err(err) = gpu.render(&terminal, selection, &context_menu, &preferences, ghost_active, ghost_phase, ghost_waiting, ghost_drawer) {
                             eprintln!("render error: {err:#}");
                         }
                         dirty = false;
@@ -2671,6 +2920,10 @@ fn run() -> Result<()> {
     })?;
 
     Ok(())
+}
+
+fn ghost_drawer_height(height: u32) -> f32 {
+    ((height as f32) * 0.68).max(160.0).min((height as f32 - 14.0).max(0.0))
 }
 
 fn ghost_badge_rect(width: u32, height: u32, scale: f32) -> Option<(f32, f32, f32, f32)> {

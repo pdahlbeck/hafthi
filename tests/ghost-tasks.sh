@@ -32,6 +32,26 @@ done
 grep -q 'separate Hafþi window' "$test_dir/interactive-message"
 [ ! -d "$HAFTHI_GHOST_DIR/ghost1" ]
 
+# A Ghost Tasks inbox routes interactive arguments to the parent window's PTY.
+# The test process acknowledges the request without starting a real package manager.
+mkdir "$test_dir/inbox"
+(
+    attempt=0
+    while [ ! -f "$test_dir/inbox/ghost1" ] && [ "$attempt" -lt 30 ]; do
+        sleep 0.1
+        attempt=$((attempt + 1))
+    done
+    [ -f "$test_dir/inbox/ghost1" ]
+    printf '%s\n' "$$" > "$HAFTHI_GHOST_DIR/ghost1/pid"
+) &
+inbox_reader=$!
+HAFTHI_GHOST_INBOX="$test_dir/inbox" PATH="$test_dir/bin:$PATH" "$g_path" yay -Syu > "$test_dir/drawer-message"
+wait "$inbox_reader"
+grep -q 'Ctrl+G opens its drawer' "$test_dir/drawer-message"
+[ "$(tr '\000' '\n' < "$test_dir/inbox/ghost1")" = "$(printf '%s\n' "$PWD" yay -Syu)" ]
+printf '0\n' > "$HAFTHI_GHOST_DIR/ghost1/exit"
+rm -r "$HAFTHI_GHOST_DIR/ghost1"
+
 # Run inside a real pseudo terminal: a nested program must not reopen /dev/tty
 # and print over the interactive prompt.
 script -q -c "HAFTHI_GHOST_DIR='$HAFTHI_GHOST_DIR' '$g_path' /bin/sh -c 'printf GHOST_TTY_LEAK >/dev/tty'; sleep 1" /dev/null </dev/null > "$test_dir/visible"
