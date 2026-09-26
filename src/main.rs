@@ -1864,6 +1864,13 @@ fn ghost_needs_input(job: &GhostSession, now: Instant) -> bool {
     last.ends_with(':') || last.ends_with('?') || last.ends_with(']')
 }
 
+fn stop_ghost_jobs(jobs: &[GhostSession], state: &std::path::Path, inbox: &std::path::Path) {
+    for job in jobs.iter().filter(|job| !job.exited) {
+        let _ = fs::write(state.join(&job.id).join("exit"), "130\n");
+    }
+    let _ = fs::remove_dir_all(inbox);
+}
+
 fn ghost_grid_size(size: PhysicalSize<u32>, settings: &Settings) -> (u16, u16) {
     let cols = ((size.width as f32 - settings.padding * 2.0 - 24.0) / settings.cell_width).floor().max(1.0) as u16;
     let rows = ((ghost_drawer_height(size.height) - 72.0) / settings.line_height).floor().max(1.0) as u16;
@@ -1933,9 +1940,11 @@ fn run() -> Result<()> {
         .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/state/hafthi/ghost-tasks")))
         .context("HOME is not set; cannot create Ghost Tasks state")?;
     fs::create_dir_all(&ghost_state)?;
-    let ghost_inbox = ghost_state.join(format!("inbox-{}", std::process::id()));
-    fs::create_dir_all(&ghost_inbox)?;
     use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&ghost_state, fs::Permissions::from_mode(0o700))?;
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let ghost_inbox = ghost_state.join(format!("inbox-{}-{nonce}", std::process::id()));
+    fs::create_dir_all(&ghost_inbox)?;
     fs::set_permissions(&ghost_inbox, fs::Permissions::from_mode(0o700))?;
 
     let (cols, rows) = grid_size(window.inner_size(), &settings);
@@ -2020,6 +2029,7 @@ fn run() -> Result<()> {
             }
             Event::UserEvent(AppEvent::PtyExited) => {
                 diagnostics::record("PTY shell exited; closing window");
+                stop_ghost_jobs(&ghost_sessions, &ghost_state, &ghost_inbox);
                 elwt.exit();
             }
             Event::UserEvent(AppEvent::ImageChosen(path)) => {
@@ -2089,8 +2099,8 @@ fn run() -> Result<()> {
                                     window.request_redraw();
                                 }
                                 Err(err) => {
-                                    let _ = fs::write(task_dir.join("output"), format!("Ghost Task could not start: {err:#}\\n"));
-                                    let _ = fs::write(task_dir.join("exit"), "1\\n");
+                                    let _ = fs::write(task_dir.join("output"), format!("Ghost Task could not start: {err:#}\n"));
+                                    let _ = fs::write(task_dir.join("exit"), "1\n");
                                 }
                             }
                         }
@@ -2143,6 +2153,7 @@ fn run() -> Result<()> {
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
                 WindowEvent::CloseRequested => {
                     diagnostics::record("window close requested");
+                    stop_ghost_jobs(&ghost_sessions, &ghost_state, &ghost_inbox);
                     elwt.exit();
                 }
                 WindowEvent::ModifiersChanged(new_modifiers) => {
