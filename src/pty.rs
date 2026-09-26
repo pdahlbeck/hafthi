@@ -178,6 +178,32 @@ pub fn interactive_command(args: &[OsString], drawer: bool) -> Result<CommandBui
     Ok(cmd)
 }
 
+/// Run any Ghost Task in an isolated PTY so late prompts can be answered in the drawer.
+fn ghost_command(args: &[OsString], cwd: &Path, shell: &Path, path_env: &str) -> Result<CommandBuilder> {
+    let first = args.first().context("missing Ghost Task command")?;
+    let first_path = Path::new(first);
+    let executable = if first_path.is_absolute() { first_path.to_path_buf() } else { cwd.join(first_path) };
+    let expression = args.len() == 1 && !is_executable(&executable)
+        && first.to_string_lossy().chars().any(|ch| ch.is_whitespace() || ";|&".contains(ch));
+    let mut cmd = CommandBuilder::new("/bin/sh");
+    cmd.arg("-c");
+    cmd.arg("\"$@\"; result=$?; printf '\\nCommand finished (exit %s). Press Ctrl+G to return to your shell.\\n' \"$result\"; exit \"$result\"");
+    cmd.arg("hafthi-ghost");
+    if expression {
+        cmd.arg(shell);
+        cmd.arg("-lc");
+    }
+    for arg in args {
+        cmd.arg(arg.clone());
+    }
+    cmd.env("PATH", path_env);
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "Hafthi");
+    cmd.env("HAFTHI", "1");
+    Ok(cmd)
+}
+
 impl PtySession {
     pub fn spawn(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, settings: &Settings, inbox: &Path, state: &Path) -> Result<Self> {
         Self::spawn_with_command(cols, rows, proxy, shell_command(settings, inbox, state))
@@ -187,8 +213,8 @@ impl PtySession {
         Self::spawn_inner(cols, rows, proxy, command, None)
     }
 
-    pub fn spawn_ghost(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, args: &[OsString], cwd: &Path, id: String, task_dir: PathBuf) -> Result<Self> {
-        let mut command = interactive_command(args, true)?;
+    pub fn spawn_ghost(cols: u16, rows: u16, proxy: EventLoopProxy<AppEvent>, args: &[OsString], cwd: &Path, path_env: &str, shell: &Path, id: String, task_dir: PathBuf) -> Result<Self> {
+        let mut command = ghost_command(args, cwd, shell, path_env)?;
         command.cwd(cwd);
         Self::spawn_inner(cols, rows, proxy, command, Some((id, task_dir)))
     }
