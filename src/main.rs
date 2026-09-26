@@ -1849,6 +1849,7 @@ mod command_help_tests {
 
 struct GhostSession {
     id: String,
+    key: String,
     pty: PtySession,
     terminal: TerminalGrid,
     last_output: Instant,
@@ -2007,21 +2008,21 @@ fn run() -> Result<()> {
                 window.request_redraw();
             }
             Event::UserEvent(AppEvent::GhostOutput(id, bytes)) => {
-                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.id == id) {
+                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.key == id) {
                     job.terminal.feed(&bytes);
                     job.last_output = Instant::now();
                     job.tail.push_str(&String::from_utf8_lossy(&bytes));
                     if job.tail.len() > 2048 {
                         job.tail = job.tail.chars().rev().take(512).collect::<String>().chars().rev().collect();
                     }
-                    if ghost_target && ghost_selected.as_deref() == Some(id.as_str()) {
+                    if ghost_target && ghost_selected.as_deref() == Some(job.id.as_str()) {
                         dirty = true;
                         window.request_redraw();
                     }
                 }
             }
             Event::UserEvent(AppEvent::GhostExited(id, _code)) => {
-                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.id == id) {
+                if let Some(job) = ghost_sessions.iter_mut().find(|job| job.key == id) {
                     job.exited = true;
                 }
                 dirty = true;
@@ -2087,14 +2088,17 @@ fn run() -> Result<()> {
                                     .collect::<std::result::Result<Vec<_>, _>>()?;
                                 anyhow::ensure!(!args.is_empty(), "missing Ghost Task command");
                                 let (ghost_cols, ghost_rows) = ghost_grid_size(window.inner_size(), &settings);
-                                let ghost_pty = PtySession::spawn_ghost(ghost_cols, ghost_rows, proxy.clone(), &args, &cwd, &path_env, &shell, id.clone(), task_dir.clone())?;
+                                let key = format!("{id}-{}", std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)?.as_nanos());
+                                let ghost_pty = PtySession::spawn_ghost(ghost_cols, ghost_rows, proxy.clone(), &args, &cwd, &path_env, &shell, key.clone(), task_dir.clone())?;
                                 let grid = TerminalGrid::new_with_theme(ghost_cols as usize, ghost_rows as usize,
                                     settings.foreground, settings.ansi, settings.scrollback);
-                                Ok(GhostSession { id: id.clone(), pty: ghost_pty, terminal: grid,
+                                Ok(GhostSession { id: id.clone(), key, pty: ghost_pty, terminal: grid,
                                     last_output: Instant::now(), tail: String::new(), exited: false })
                             })();
                             match result {
                                 Ok(job) => {
+                                    ghost_sessions.retain(|session| !session.exited && session.id != id);
                                     ghost_selected = Some(id);
                                     ghost_sessions.push(job);
                                     ghost_active = true;
