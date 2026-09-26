@@ -48,9 +48,26 @@ inbox_reader=$!
 HAFTHI_GHOST_INBOX="$test_dir/inbox" PATH="$test_dir/bin:$PATH" "$g_path" yay -Syu > "$test_dir/drawer-message"
 wait "$inbox_reader"
 grep -q 'Ctrl+G opens its drawer' "$test_dir/drawer-message"
-[ "$(tr '\000' '\n' < "$test_dir/inbox/ghost1")" = "$(printf '%s\n' "$PWD" yay -Syu)" ]
+[ "$(tr '\000' '\n' < "$test_dir/inbox/ghost1")" = "$(printf '%s\n' HAFTHI_GHOST_V2 "$PWD" "$test_dir/bin:$PATH" "${HAFTHI_GHOST_SHELL:-${SHELL:-/bin/sh}}" yay -Syu)" ]
 printf '0\n' > "$HAFTHI_GHOST_DIR/ghost1/exit"
-rm -r "$HAFTHI_GHOST_DIR/ghost1"
+
+# A command that asks for input only after starting uses the same PTY path.
+(
+    attempt=0
+    while [ ! -f "$test_dir/inbox/ghost2" ] && [ "$attempt" -lt 30 ]; do
+        sleep 0.1
+        attempt=$((attempt + 1))
+    done
+    [ -f "$test_dir/inbox/ghost2" ]
+    printf '%s\n' "$$" > "$HAFTHI_GHOST_DIR/ghost2/pid"
+) &
+inbox_reader=$!
+HAFTHI_GHOST_INBOX="$test_dir/inbox" "$g_path" /bin/sh -c 'printf Ready:; read answer' > "$test_dir/delayed-message"
+wait "$inbox_reader"
+grep -q 'Ctrl+G opens its drawer' "$test_dir/delayed-message"
+[ "$(tr '\000' '\n' < "$test_dir/inbox/ghost2")" = "$(printf '%s\n' HAFTHI_GHOST_V2 "$PWD" "$PATH" "${HAFTHI_GHOST_SHELL:-${SHELL:-/bin/sh}}" /bin/sh -c 'printf Ready:; read answer')" ]
+printf '0\n' > "$HAFTHI_GHOST_DIR/ghost2/exit"
+rm -r "$HAFTHI_GHOST_DIR/ghost1" "$HAFTHI_GHOST_DIR/ghost2"
 
 # Run inside a real pseudo terminal: a nested program must not reopen /dev/tty
 # and print over the interactive prompt.
