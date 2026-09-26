@@ -2079,12 +2079,15 @@ fn run() -> Result<()> {
                                 let data = request?;
                                 anyhow::ensure!(data.len() < 65536 && data.last() == Some(&0), "invalid Ghost Task request");
                                 let mut parts = data[..data.len() - 1].split(|byte| *byte == 0);
+                                anyhow::ensure!(parts.next().context("missing request version")? == b"HAFTHI_GHOST_V2", "restart Hafþi to run this version of Ghost Tasks");
                                 let cwd = PathBuf::from(String::from_utf8(parts.next().context("missing working directory")?.to_vec())?);
+                                let path_env = String::from_utf8(parts.next().context("missing PATH")?.to_vec())?;
+                                let shell = PathBuf::from(String::from_utf8(parts.next().context("missing shell")?.to_vec())?);
                                 let args = parts.map(|part| String::from_utf8(part.to_vec()).map(OsString::from))
                                     .collect::<std::result::Result<Vec<_>, _>>()?;
                                 anyhow::ensure!(!args.is_empty(), "missing Ghost Task command");
                                 let (ghost_cols, ghost_rows) = ghost_grid_size(window.inner_size(), &settings);
-                                let ghost_pty = PtySession::spawn_ghost(ghost_cols, ghost_rows, proxy.clone(), &args, &cwd, id.clone(), task_dir.clone())?;
+                                let ghost_pty = PtySession::spawn_ghost(ghost_cols, ghost_rows, proxy.clone(), &args, &cwd, &path_env, &shell, id.clone(), task_dir.clone())?;
                                 let grid = TerminalGrid::new_with_theme(ghost_cols as usize, ghost_rows as usize,
                                     settings.foreground, settings.ansi, settings.scrollback);
                                 Ok(GhostSession { id: id.clone(), pty: ghost_pty, terminal: grid,
