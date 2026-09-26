@@ -7,21 +7,24 @@
 
 Hafþi grew out of the Footsole project, but the current codebase is a native GPU terminal rather than a GTK/VTE wrapper. The name comes from the Gutasaga and reflects the project's roots in Gotland.
 
-> **Version 0.7.35:** Ghost Tasks run background commands with private logs and completion status. Linux/Wayland is the only supported platform.
+> **Version 0.7.36:** Ghost Tasks run background commands with private logs and completion status. Linux/Wayland is the only supported platform.
 
 ### Ghost Tasks
 
-Prefix a non-interactive command with `g` to run it in the background without its output interrupting your prompt:
+Prefix a command with `g` to run it in the background without its output interrupting your prompt:
 
 ```sh
 g make -j4
+g yay -Syu
 g jobs
 g log ghost1
 g follow ghost1   # Follow the log; press Ctrl+C to stop watching
 g clean                 # Remove logs for completed tasks
 ```
 
-While a task runs, a larger badge in the upper right blinks between `{ö}` and `{-}`. It disappears when the last task finishes. The first task is `ghost1`, the next `ghost2`, and so on (numbers freed by `g clean` may be reused). Older `job.*` logs remain accessible. The start message gives you the actual task ID. To run a pipeline or shell expression, quote it, e.g. `g 'make && echo done'`. Each task keeps its output, exit status and working directory separately; Hafþi shows a desktop notification when the task finishes if your system has `notify-send`. Logs are private to your user under `~/.local/state/hafthi/ghost-tasks` (or `$XDG_STATE_HOME/hafthi/ghost-tasks`). `g` is available inside Hafþi only. For interactive package managers, `g yay` (or `g yay -Syu`) starts a numbered task in its own PTY inside the existing Hafþi window. Press **Ctrl+G** to slide its drawer down, answer password or confirmation prompts there, then press **Ctrl+G** again to hide it while it keeps running. The normal shell remains ready for other commands. The badge blinks `{?}` in amber when a prompt appears to need input; because terminal output varies, Ctrl+G always opens the task even if the badge misses a prompt. Use `g jobs` for its status and `g log ghost1` for captured output. Password input is handled by the task PTY and is never copied into the normal shell. Silent Ghost Tasks have no controlling terminal; programs that try to open `/dev/tty` cannot print prompts over your shell. Read failures with `g log ID`. Tasks run in a separate process, so `g cd ...` cannot change the current shell directory.
+Every new task gets its own PTY in the originating Hafþi window. If a command requests input immediately or after running for a while, press **Ctrl+G** to slide its drawer down and answer there. Press **Ctrl+G** again to hide the drawer while the task keeps running; the normal shell stays available. The badge at the upper right blinks between `{ö}` and `{-}`, and may flash `{?}` in amber when output looks like a prompt. Prompt detection is a hint; Ctrl+G works at any time. Input to the drawer, including passwords, never goes to the normal shell.
+
+Tasks are numbered `ghost1`, `ghost2`, and so on. `g jobs` shows status and `g log ID` shows captured output. The drawer shows the most recently started task; use `g log ID` for earlier jobs. Quote pipelines or expressions, for example `g 'make && echo done'`. Each job runs in the directory where it started, so `g cd ...` cannot change the current shell directory. Logs and exit codes are private to your account under `~/.local/state/hafthi/ghost-tasks` (or `$XDG_STATE_HOME/hafthi/ghost-tasks`). Use `g clean` to remove completed logs. Hafþi sends a completion notification when `notify-send` is available. The `g` helper is available inside Hafþi.
 
 ### Optional Fish and Starship
 
