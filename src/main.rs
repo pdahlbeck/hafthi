@@ -6,6 +6,7 @@ mod diagnostics;
 mod ghost_status;
 mod menu;
 mod plugins;
+mod packages;
 mod preferences;
 mod pty;
 mod settings;
@@ -725,7 +726,7 @@ impl GpuState {
                         add("Install them yourself with pacman or an AUR helper.",
                             226.0, 100.0, 478.0, 12.0, muted);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 49.0;
+                            let y = 112.0 + index as f32 * 44.0;
                             let symbol = match plugin {
                                 Plugin::Fish => ">",
                                 Plugin::Starship => "✦",
@@ -733,6 +734,7 @@ impl GpuState {
                                 Plugin::Sampler => "▥",
                                 Plugin::Yazi => "▣",
                                 Plugin::Micro => "✎",
+                                Plugin::Yay => "Y",
                             };
                             let status = match plugin {
                                 Plugin::Fish => if self.settings.use_fish { "Shell · enabled" } else { "Shell · disabled" },
@@ -741,11 +743,33 @@ impl GpuState {
                                 Plugin::Sampler => if self.settings.use_sampler { "Dashboard · enabled" } else { "Dashboard · disabled" },
                                 Plugin::Yazi => if self.settings.use_yazi { "Files · enabled" } else { "Files · disabled" },
                                 Plugin::Micro => if self.settings.use_micro { "Editor · enabled" } else { "Editor · disabled" },
+                                Plugin::Yay => if pty::installed_program("yay").is_some() { "AUR helper · installed" } else { "AUR helper · not installed" },
                             };
                             add(symbol, 230.0, y + 10.0, 26.0, 20.0, accent);
                             add(plugin.title(), 275.0, y + 2.0, 250.0, 16.0, primary);
                             add(status, 275.0, y + 22.0, 305.0, 12.0, muted);
-                            add("›", 590.0, y + 10.0, 20.0, 20.0, muted);
+                            add("›", if plugin == Plugin::Yay { 681.0 } else { 590.0 }, y + 10.0, 20.0, 20.0, muted);
+                        }
+                    }
+                    Some(Plugin::Yay) => {
+                        add("AUR HELPER", 226.0, 91.0, 240.0, 11.0, accent);
+                        add("Yay", 226.0, 132.0, 360.0, 18.0, primary);
+                        let installed = pty::installed_program("yay").is_some();
+                        let supported = packages::yay_install_available();
+                        add(if installed { "Yay is installed" } else if supported { "Yay is not installed" }
+                            else { "Installation is available on Arch-based systems only" },
+                            226.0, 164.0, 478.0, 12.0, muted);
+                        add("Find, install and update packages from the AUR.",
+                            226.0, 199.0, 478.0, 12.0, muted);
+                        add(if installed { "Remove existing Yay before changing versions." }
+                            else if prefs.yay_version == packages::YayVersion::Development {
+                                "Latest development code from the yay-git AUR package."
+                            } else { "Stable releases; recommended for everyday use." },
+                            226.0, 259.0, 478.0, 11.0, muted);
+                        add("You may be asked for your sudo password and confirmation.",
+                            226.0, 325.0, 478.0, 11.0, muted);
+                        if !prefs.plugin_error.is_empty() {
+                            add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -874,6 +898,9 @@ impl GpuState {
                     PrefAction::InstallSampler => "Install Sampler",
                     PrefAction::InstallYazi => "Install Yazi",
                     PrefAction::InstallMicro => "Install Micro",
+                    PrefAction::InstallYay => if prefs.yay_version == packages::YayVersion::Development { "Install yay-git" } else { "Install Yay" },
+                    PrefAction::YayStable => "Stable",
+                    PrefAction::YayDevelopment => "Development (yay-git)",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Integrations",
@@ -1226,13 +1253,17 @@ impl GpuState {
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 49.0;
+                            let y = 112.0 + index as f32 * 44.0;
                             let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
-                            shape(208.0, y - 1.0, 512.0, 46.0, 9.0, card_border);
-                            shape(209.0, y, 510.0, 44.0, 8.0,
+                            shape(208.0, y - 1.0, 512.0, 42.0, 9.0, card_border);
+                            shape(209.0, y, 510.0, 40.0, 8.0,
                                 if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
                             shape(224.0, y + 5.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
                         }
+                    }
+                    Some(Plugin::Yay) => {
+                        shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
+                        shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
                     }
                     Some(Plugin::Fish) => {
                         for (y, h) in [(78.0, 102.0), (186.0, 112.0), (306.0, 91.0)] {
@@ -1289,6 +1320,8 @@ impl GpuState {
                     continue;
                 }
                 let active = button.action == selected || button.action == PrefAction::Save
+                    || (button.action == PrefAction::YayStable && prefs.yay_version == packages::YayVersion::Stable)
+                    || (button.action == PrefAction::YayDevelopment && prefs.yay_version == packages::YayVersion::Development)
                     || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled)
                     || (button.action == PrefAction::ToggleFish && self.settings.use_fish)
                     || (button.action == PrefAction::ToggleFishGreeting && self.settings.show_fish_greeting)
@@ -1882,6 +1915,11 @@ fn run() -> Result<()> {
     let plugin = if std::env::args().nth(1).as_deref() == Some("--plugin") {
         Some(std::env::args().nth(2).context("missing plugin name")?)
     } else { None };
+    let install_yay = std::env::args().nth(1).as_deref() == Some("--install-yay");
+    let installer_command = if install_yay {
+        let version = packages::YayVersion::from_arg(std::env::args().nth(2).as_deref())?;
+        Some(packages::yay_install_command(version)?)
+    } else { None };
     let plugin_command = plugin.as_deref().map(plugins::command).transpose()?;
     let interactive_args = if std::env::args().nth(1).as_deref() == Some("--interactive") {
         Some(std::env::args_os().skip(2).collect::<Vec<_>>())
@@ -1896,7 +1934,9 @@ fn run() -> Result<()> {
 
     let mut settings = Settings::load();
 
-    let title = if let Some(args) = &interactive_args {
+    let title = if install_yay {
+        "Install Yay — Hafþi".to_string()
+    } else if let Some(args) = &interactive_args {
         let name = args.first()
             .and_then(|arg| std::path::Path::new(arg).file_name())
             .and_then(|name| name.to_str())
@@ -1906,7 +1946,7 @@ fn run() -> Result<()> {
         plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" }))
     };
     let builder = WindowBuilder::new()
-        .with_title(title)
+        .with_title(title.clone())
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -1930,7 +1970,7 @@ fn run() -> Result<()> {
     let mut wayland_no_blur = wayland_effect::NoBlur::attach(&window);
 
     let mut gpu = pollster::block_on(GpuState::new(window.clone(), settings.clone()))?;
-    window.set_title(&plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" })));
+    window.set_title(&title);
     if wayland_no_blur.is_none() {
         eprintln!("Hafþi: ext-background-effect-v1 unavailable, using Hyprland fallback");
         request_hyprland_no_blur();
@@ -1956,7 +1996,7 @@ fn run() -> Result<()> {
         settings.ansi,
         settings.scrollback,
     );
-    let pty = if let Some(command) = interactive_command.or(plugin_command) {
+    let pty = if let Some(command) = installer_command.or(interactive_command).or(plugin_command) {
         PtySession::spawn_with_command(cols, rows, proxy.clone(), command)?
     } else {
         PtySession::spawn(cols, rows, proxy.clone(), &settings, &ghost_inbox, &ghost_state)?
@@ -2424,6 +2464,7 @@ fn run() -> Result<()> {
                                 Some(PrefAction::SelectPage(page)) => {
                                     preferences.page = page;
                                     preferences.plugin = None;
+                                    preferences.plugin_error.clear();
                                     preferences.hovered = None;
                                     preferences.question_editing = false;
                                 }
@@ -2435,6 +2476,18 @@ fn run() -> Result<()> {
                                 Some(PrefAction::BackToPlugins) => {
                                     preferences.plugin = None;
                                     preferences.question_editing = false;
+                                }
+                                Some(PrefAction::YayStable | PrefAction::YayDevelopment) => {
+                                    preferences.yay_version = if action == Some(PrefAction::YayDevelopment) {
+                                        packages::YayVersion::Development
+                                    } else { packages::YayVersion::Stable };
+                                }
+                                Some(PrefAction::InstallYay) => {
+                                    if let Err(error) = packages::open_yay_installer(preferences.yay_version) {
+                                        preferences.plugin_error = format!("Could not install Yay: {error}");
+                                    } else {
+                                        preferences.plugin_error.clear();
+                                    }
                                 }
                                 Some(PrefAction::OpenPluginGithub(plugin)) => {
                                     if let Err(error) = std::process::Command::new("xdg-open")
