@@ -53,6 +53,12 @@ The first Sampler launch creates `~/.config/hafthi/sampler.yml`, a copy of the i
 
 Install [Micro](https://github.com/micro-editor/micro) yourself on Arch with `sudo pacman -S --needed micro wl-clipboard`. The Wayland clipboard package lets Micro share copied text with other applications. Enable Micro in **Preferences → Integrations**, then choose **Open Micro** to edit in a separate Hafþi window. The install button only types the command in your shell for you to review. You can also use `micro filename` directly in the terminal; Hafþi does not change your default editor.
 
+### Install Yay from Preferences
+
+On Arch and Arch-based distributions, open **Preferences → Integrations → Yay**, choose **Stable** (the default) or **Development (yay-git)**, then click Install. Hafþi opens a separate terminal window with the installer. Enter your sudo password and answer pacman/makepkg confirmations there. Stable uses the distribution’s Yay package when available; otherwise it installs `git` and `base-devel`, downloads the official AUR `yay` package and builds it as your normal user. Development always builds the official AUR `yay-git` package with the latest development changes. The installer keeps the result visible until you press Enter. An existing Yay installation is detected, and unsupported distributions do not show the install button. [Yay on GitHub](https://github.com/Jguer/yay).
+
+The Integrations overview scrolls with the mouse wheel or touchpad. Drag the scrollbar on the right to reach the remaining tools. The heading and Save/Cancel buttons stay in place.
+
 ## Current stack
 
 - Rust
@@ -69,6 +75,7 @@ Install [Micro](https://github.com/micro-editor/micro) yourself on Arch with `su
 - GPU-rendered terminal text
 - real PTY shell operation
 - optional Fish shell, Fish greeting control and Starship prompt
+- Yay installation from Preferences on supported Arch-based systems, with Stable and Development (`yay-git`) choices
 - optional tgpt command help
 - optional Sampler dashboard, Yazi file manager and Micro editor, launched in separate windows
 - ANSI 16-color, 256-color and truecolor support
@@ -175,9 +182,3 @@ At `opacity=0`, the intended result is a fully transparent terminal background w
 ## License
 
 MIT
-
-### Install Yay from Preferences
-
-On Arch and Arch-based distributions, open **Preferences → Integrations → Yay**, choose **Stable** (the default) or **Development (yay-git)**, then click Install. Hafþi opens a separate terminal window with the installer. Enter your sudo password and answer pacman/makepkg confirmations there. Stable uses the distribution’s Yay package when available; otherwise it installs `git` and `base-devel`, downloads the official AUR `yay` package and builds it as your normal user. Development always builds the official AUR `yay-git` package with the latest development changes. The installer keeps the result visible until you press Enter. An existing Yay installation is detected, and unsupported distributions do not show the install button. [Yay on GitHub](https://github.com/Jguer/yay).
-
-The Integrations overview scrolls with the mouse wheel or touchpad. Drag the scrollbar on the right to reach the remaining tools. The heading and Save/Cancel buttons stay in place.
