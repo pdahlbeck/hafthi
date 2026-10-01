@@ -179,3 +179,5 @@ MIT
 ### Install Yay from Preferences
 
 On Arch and Arch-based distributions, open **Preferences → Integrations → Yay**, choose **Stable** (the default) or **Development (yay-git)**, then click Install. Hafþi opens a separate terminal window with the installer. Enter your sudo password and answer pacman/makepkg confirmations there. Stable uses the distribution’s Yay package when available; otherwise it installs `git` and `base-devel`, downloads the official AUR `yay` package and builds it as your normal user. Development always builds the official AUR `yay-git` package with the latest development changes. The installer keeps the result visible until you press Enter. An existing Yay installation is detected, and unsupported distributions do not show the install button. [Yay on GitHub](https://github.com/Jguer/yay).
+
+The Integrations overview scrolls with the mouse wheel or touchpad. Drag the scrollbar on the right to reach the remaining tools. The heading and Save/Cancel buttons stay in place.
