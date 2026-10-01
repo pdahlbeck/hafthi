@@ -639,6 +639,7 @@ impl GpuState {
             let muted = Color::rgb(164, 176, 185);
             let accent = Color::rgb(117, 188, 231);
             let mut labels: Vec<(Buffer, f32, f32, TextBounds)> = Vec::new();
+            let clip_list_text = std::cell::Cell::new(false);
             let mut add = |text: &str, x: f32, y: f32, width: f32, size: f32, color: Color| {
                 let (px, py) = prefs.pos(x, y);
                 let mut buffer = Buffer::new(
@@ -652,11 +653,21 @@ impl GpuState {
                     Shaping::Advanced,
                 );
                 buffer.shape_until_scroll(&mut self.font_system);
-                labels.push((buffer, px, py, TextBounds {
+                let mut bounds = TextBounds {
                     left: px as i32, top: py as i32,
                     right: (px + width * prefs.scale) as i32,
                     bottom: (py + 38.0 * prefs.scale) as i32,
-                }));
+                };
+                if clip_list_text.get() {
+                    let (x, y, w, h) = prefs.integration_viewport();
+                    bounds.left = bounds.left.max(x.ceil() as i32);
+                    bounds.top = bounds.top.max(y.ceil() as i32);
+                    bounds.right = bounds.right.min((x + w).floor() as i32);
+                    bounds.bottom = bounds.bottom.min((y + h).floor() as i32);
+                }
+                if bounds.left < bounds.right && bounds.top < bounds.bottom {
+                    labels.push((buffer, px, py, bounds));
+                }
             };
 
             add("Hafþi", 19.0, 18.0, 155.0, 19.0, primary);
@@ -725,8 +736,11 @@ impl GpuState {
                             226.0, 82.0, 478.0, 12.0, muted);
                         add("Install them yourself with pacman or an AUR helper.",
                             226.0, 100.0, 478.0, 12.0, muted);
+                        clip_list_text.set(true);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 44.0;
+                            let y = prefs.integration_row_y(index);
+                            if y + PreferencesPanel::CARD_HEIGHT < PreferencesPanel::LIST_TOP
+                                || y > PreferencesPanel::LIST_BOTTOM { continue; }
                             let symbol = match plugin {
                                 Plugin::Fish => ">",
                                 Plugin::Starship => "✦",
@@ -745,11 +759,12 @@ impl GpuState {
                                 Plugin::Micro => if self.settings.use_micro { "Editor · enabled" } else { "Editor · disabled" },
                                 Plugin::Yay => if pty::installed_program("yay").is_some() { "AUR helper · installed" } else { "AUR helper · not installed" },
                             };
-                            add(symbol, 230.0, y + 10.0, 26.0, 20.0, accent);
-                            add(plugin.title(), 275.0, y + 2.0, 250.0, 16.0, primary);
-                            add(status, 275.0, y + 22.0, 305.0, 12.0, muted);
-                            add("›", if plugin == Plugin::Yay { 681.0 } else { 590.0 }, y + 10.0, 20.0, 20.0, muted);
+                            add(symbol, 230.0, y + 16.0, 26.0, 20.0, accent);
+                            add(plugin.title(), 275.0, y + 8.0, 250.0, 16.0, primary);
+                            add(status, 275.0, y + 30.0, 305.0, 12.0, muted);
+                            add("›", if plugin == Plugin::Yay { 681.0 } else { 590.0 }, y + 16.0, 20.0, 20.0, muted);
                         }
+                        clip_list_text.set(false);
                     }
                     Some(Plugin::Yay) => {
                         add("AUR HELPER", 226.0, 91.0, 240.0, 11.0, accent);
@@ -920,6 +935,8 @@ impl GpuState {
                 let color = if button.action == PrefAction::Save {
                     Color::rgb(245, 250, 253)
                 } else { primary };
+                clip_list_text.set(prefs.integration_list_visible()
+                    && !matches!(button.action, PrefAction::Save | PrefAction::Cancel));
                 add(caption, x, y, button.w / prefs.scale, font_size, color);
             }
             drop(add);
@@ -1100,6 +1117,7 @@ impl GpuState {
         }
 
         let mut rect_vertices = Vec::new();
+        let mut integration_vertices = Vec::new();
 
         if let Some((start, end)) = selection {
             let (a, b) = if (start.1, start.0) <= (end.1, end.0) {
@@ -1193,10 +1211,12 @@ impl GpuState {
                 prefs.x, prefs.y, prefs.width, prefs.height(),
                 8.0 * scale, [0.045, 0.052, 0.060, 1.0],
             );
+            let clip_list_shapes = std::cell::Cell::new(false);
             let mut shape = |x: f32, y: f32, w: f32, h: f32, radius: f32, color| {
                 let (x, y) = prefs.pos(x, y);
                 RectRenderer::push_rounded_rect(
-                    &mut rect_vertices, self.config.width, self.config.height,
+                    if clip_list_shapes.get() { &mut integration_vertices } else { &mut rect_vertices },
+                    self.config.width, self.config.height,
                     x, y, w * scale, h * scale, radius * scale, color,
                 );
             };
@@ -1252,13 +1272,22 @@ impl GpuState {
                 }
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
+                        clip_list_shapes.set(true);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 44.0;
+                            let y = prefs.integration_row_y(index);
+                            if y + PreferencesPanel::CARD_HEIGHT < PreferencesPanel::LIST_TOP
+                                || y > PreferencesPanel::LIST_BOTTOM { continue; }
                             let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
-                            shape(208.0, y - 1.0, 512.0, 42.0, 9.0, card_border);
-                            shape(209.0, y, 510.0, 40.0, 8.0,
+                            shape(208.0, y, 500.0, PreferencesPanel::CARD_HEIGHT, 9.0, card_border);
+                            shape(209.0, y + 1.0, 498.0, PreferencesPanel::CARD_HEIGHT - 2.0, 8.0,
                                 if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
-                            shape(224.0, y + 5.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
+                            shape(224.0, y + 11.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
+                        }
+                        clip_list_shapes.set(false);
+                        if let Some((x, y, w, h)) = prefs.integration_scrollbar() {
+                            shape(x, PreferencesPanel::LIST_TOP, w, PreferencesPanel::LIST_BOTTOM - PreferencesPanel::LIST_TOP,
+                                3.0, [0.10, 0.12, 0.14, 1.0]);
+                            shape(x, y, w, h, 3.0, [0.35, 0.43, 0.49, 1.0]);
                         }
                     }
                     Some(Plugin::Yay) => {
@@ -1305,6 +1334,8 @@ impl GpuState {
                 PrefAction::ImageFull
             };
             for button in prefs.button_rects() {
+                clip_list_shapes.set(prefs.integration_list_visible()
+                    && !matches!(button.action, PrefAction::Save | PrefAction::Cancel));
                 if matches!(button.action, PrefAction::OpenPlugin(_)) {
                     continue; // The whole card already has its own hover surface.
                 }
@@ -1445,6 +1476,7 @@ impl GpuState {
         let rect_buffer = self
             .rect_renderer
             .create_buffer(&self.device, &rect_vertices);
+        let integration_buffer = self.rect_renderer.create_buffer(&self.device, &integration_vertices);
 
         let mut encoder = self
             .device
@@ -1529,6 +1561,19 @@ impl GpuState {
             if let Some(buffer) = rect_buffer.as_ref() {
                 self.rect_renderer
                     .draw(&mut pass, buffer, rect_vertices.len() as u32);
+            }
+
+            if let Some(buffer) = integration_buffer.as_ref() {
+                let (x, y, w, h) = prefs.integration_viewport();
+                let left = (x.ceil() as u32).min(self.config.width);
+                let top = (y.ceil() as u32).min(self.config.height);
+                let right = ((x + w).floor() as u32).min(self.config.width);
+                let bottom = ((y + h).floor() as u32).min(self.config.height);
+                if right > left && bottom > top {
+                    pass.set_scissor_rect(left, top, right - left, bottom - top);
+                    self.rect_renderer.draw(&mut pass, buffer, integration_vertices.len() as u32);
+                    pass.set_scissor_rect(0, 0, self.config.width, self.config.height);
+                }
             }
 
             self.text_renderer
@@ -2405,6 +2450,10 @@ fn run() -> Result<()> {
                     mouse_pos = position;
 
                     if preferences.visible {
+                        if preferences.drag_integration_scrollbar(position.y as f32) {
+                            dirty = true;
+                            window.request_redraw();
+                        }
                         if opacity_dragging {
                             settings.opacity = preferences.opacity_for_x(position.x as f32) as f64 / 100.0;
                             gpu.apply_settings(settings.clone());
@@ -2457,6 +2506,11 @@ fn run() -> Result<()> {
                     if ghost_target { return; }
                     if preferences.visible {
                         if state == ElementState::Pressed {
+                            if preferences.begin_integration_scrollbar_drag(mouse_pos.x as f32, mouse_pos.y as f32) {
+                                dirty = true;
+                                window.request_redraw();
+                                return;
+                            }
                             let action = preferences
                                 .action_at(mouse_pos.x as f32, mouse_pos.y as f32);
 
@@ -2748,6 +2802,7 @@ fn run() -> Result<()> {
                             window.request_redraw();
                         } else {
                             opacity_dragging = false;
+                            preferences.end_integration_scrollbar_drag();
                         }
                     } else if context_menu.visible {
                         if state == ElementState::Pressed {
@@ -2900,6 +2955,14 @@ fn run() -> Result<()> {
                         return;
                     }
                     if preferences.visible {
+                        let distance = match delta {
+                            MouseScrollDelta::LineDelta(_, y) => -y * 36.0,
+                            MouseScrollDelta::PixelDelta(pos) => -pos.y as f32 / preferences.scale,
+                        };
+                        if preferences.scroll_integrations(mouse_pos.x as f32, mouse_pos.y as f32, distance) {
+                            dirty = true;
+                            window.request_redraw();
+                        }
                         return;
                     }
                     if context_menu.visible {

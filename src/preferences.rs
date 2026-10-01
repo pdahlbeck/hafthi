@@ -139,12 +139,18 @@ pub struct PreferencesPanel {
     pub question_input: String,
     pub plugin_error: String,
     pub yay_version: crate::packages::YayVersion,
+    integration_scroll: f32,
+    integration_drag_grab: Option<f32>,
 }
 
 impl PreferencesPanel {
     pub const WIDTH: f32 = 736.0;
     pub const HEIGHT: f32 = 476.0;
     pub const SIDEBAR_WIDTH: f32 = 192.0;
+    pub const LIST_TOP: f32 = 130.0;
+    pub const LIST_BOTTOM: f32 = 404.0;
+    pub const CARD_HEIGHT: f32 = 56.0;
+    pub const CARD_STEP: f32 = 66.0;
 
     pub fn new() -> Self {
         Self {
@@ -164,6 +170,8 @@ impl PreferencesPanel {
             question_input: String::new(),
             plugin_error: String::new(),
             yay_version: crate::packages::YayVersion::Stable,
+            integration_scroll: 0.0,
+            integration_drag_grab: None,
         }
     }
 
@@ -180,6 +188,7 @@ impl PreferencesPanel {
         self.x = (surface_width as f32 - self.width) / 2.0;
         self.y = (surface_height as f32 - self.height()) / 2.0;
         self.visible = true;
+        self.integration_drag_grab = None;
         self.hovered = None;
         self.hovered_page = None;
         self.color_editing = false;
@@ -190,6 +199,7 @@ impl PreferencesPanel {
 
     pub fn close(&mut self) {
         self.visible = false;
+        self.integration_drag_grab = None;
         self.hovered = None;
         self.hovered_page = None;
         self.color_editing = false;
@@ -223,6 +233,74 @@ impl PreferencesPanel {
     pub fn slider_rect(&self) -> (f32, f32, f32, f32) {
         let (x, y) = self.pos(226.0, 223.0);
         (x, y, 452.0 * self.scale, 28.0 * self.scale)
+    }
+
+    pub fn integration_list_visible(&self) -> bool {
+        self.visible && self.page == PrefPage::Plugins && self.plugin.is_none()
+    }
+
+    pub fn integration_row_y(&self, index: usize) -> f32 {
+        Self::LIST_TOP + index as f32 * Self::CARD_STEP - self.integration_scroll
+    }
+
+    fn integration_scroll_max(&self) -> f32 {
+        (Plugin::ALL.len() as f32 * Self::CARD_STEP
+            - (Self::CARD_STEP - Self::CARD_HEIGHT)
+            - (Self::LIST_BOTTOM - Self::LIST_TOP)).max(0.0)
+    }
+
+    pub fn integration_viewport(&self) -> (f32, f32, f32, f32) {
+        let (x, y) = self.pos(208.0, Self::LIST_TOP);
+        (x, y, 500.0 * self.scale, (Self::LIST_BOTTOM - Self::LIST_TOP) * self.scale)
+    }
+
+    pub fn scroll_integrations(&mut self, x: f32, y: f32, logical_delta: f32) -> bool {
+        if !self.integration_list_visible() || !logical_delta.is_finite() { return false; }
+        let (vx, vy, vw, vh) = self.integration_viewport();
+        if x < vx || x > vx + vw + 16.0 * self.scale || y < vy || y > vy + vh { return false; }
+        let old = self.integration_scroll;
+        self.integration_scroll = (old + logical_delta).clamp(0.0, self.integration_scroll_max());
+        self.update_hover(x, y);
+        old != self.integration_scroll
+    }
+
+    // Scrollbar geometry uses the same logical coordinates as the cards.
+    pub fn integration_scrollbar(&self) -> Option<(f32, f32, f32, f32)> {
+        if !self.integration_list_visible() || self.integration_scroll_max() == 0.0 { return None; }
+        let height = Self::LIST_BOTTOM - Self::LIST_TOP;
+        let thumb_height = (height * height / (height + self.integration_scroll_max())).max(30.0);
+        let y = Self::LIST_TOP + (height - thumb_height) * self.integration_scroll / self.integration_scroll_max();
+        Some((714.0, y, 6.0, thumb_height))
+    }
+
+    pub fn begin_integration_scrollbar_drag(&mut self, x: f32, y: f32) -> bool {
+        let Some((sx, sy, sw, sh)) = self.integration_scrollbar() else { return false; };
+        let (x, y) = ((x - self.x) / self.scale, (y - self.y) / self.scale);
+        if x < sx - 4.0 || x > sx + sw + 4.0 || y < Self::LIST_TOP || y > Self::LIST_BOTTOM { return false; }
+        self.integration_drag_grab = Some(if y >= sy && y <= sy + sh { y - sy } else { sh / 2.0 });
+        self.drag_integration_scrollbar(self.y + y * self.scale);
+        true
+    }
+
+    pub fn drag_integration_scrollbar(&mut self, y: f32) -> bool {
+        if !self.integration_list_visible() { self.integration_drag_grab = None; return false; }
+        let Some(grab) = self.integration_drag_grab else { return false; };
+        let Some((_, _, _, sh)) = self.integration_scrollbar() else { return false; };
+        let travel = Self::LIST_BOTTOM - Self::LIST_TOP - sh;
+        let old = self.integration_scroll;
+        self.integration_scroll = (((y - self.y) / self.scale - Self::LIST_TOP - grab) / travel)
+            .clamp(0.0, 1.0) * self.integration_scroll_max();
+        old != self.integration_scroll
+    }
+
+    pub fn end_integration_scrollbar_drag(&mut self) {
+        self.integration_drag_grab = None;
+    }
+
+    fn list_button_at(&self, action: PrefAction, y: f32) -> bool {
+        if !self.integration_list_visible() || matches!(action, PrefAction::Save | PrefAction::Cancel) { return true; }
+        let (_, top, _, height) = self.integration_viewport();
+        y >= top && y <= top + height
     }
 
     pub fn button_rects(&self) -> Vec<HitRect> {
@@ -267,8 +345,8 @@ impl PreferencesPanel {
             PrefPage::Plugins => match self.plugin {
                 None => {
                     for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                        let y = 112.0 + index as f32 * 44.0;
-                        add(209.0, y, if plugin == Plugin::Yay { 495.0 } else { 404.0 }, 40.0, OpenPlugin(plugin));
+                        let y = self.integration_row_y(index);
+                        add(209.0, y, if plugin == Plugin::Yay { 495.0 } else { 404.0 }, Self::CARD_HEIGHT, OpenPlugin(plugin));
                         let toggle = match plugin {
                             Plugin::Fish => ToggleFish,
                             Plugin::Starship => ToggleStarship,
@@ -278,7 +356,7 @@ impl PreferencesPanel {
                             Plugin::Micro => ToggleMicro,
                             Plugin::Yay => continue,
                         };
-                        add(620.0, y + 3.0, 84.0, 34.0, toggle);
+                        add(620.0, y + 11.0, 84.0, 34.0, toggle);
                     }
                 }
                 Some(plugin) => {
@@ -325,6 +403,12 @@ impl PreferencesPanel {
         }
         add(526.0, 430.0, 86.0, 34.0, Cancel);
         add(620.0, 430.0, 84.0, 34.0, Save);
+        drop(add);
+        if self.integration_list_visible() {
+            let (_, top, _, height) = self.integration_viewport();
+            buttons.retain(|rect| matches!(rect.action, Save | Cancel)
+                || (rect.y < top + height && rect.y + rect.h > top));
+        }
         buttons
     }
 
@@ -350,7 +434,7 @@ impl PreferencesPanel {
         self.hovered = self
             .button_rects()
             .into_iter()
-            .find(|rect| rect.contains(x, y))
+            .find(|rect| rect.contains(x, y) && self.list_button_at(rect.action, y))
             .map(|rect| rect.action);
         self.hovered_page = PrefPage::ALL
             .into_iter()
@@ -373,7 +457,7 @@ impl PreferencesPanel {
         }
         self.button_rects()
             .into_iter()
-            .find(|rect| rect.contains(x, y))
+            .find(|rect| rect.contains(x, y) && self.list_button_at(rect.action, y))
             .map(|rect| rect.action)
     }
 }
@@ -427,6 +511,59 @@ mod tests {
     }
 
     #[test]
+    fn integration_scroll_clips_clicks_and_preserves_header_footer_and_details() {
+        for (width, height) in [(620, 440), (1816, 2316)] {
+            let mut panel = PreferencesPanel::new();
+            panel.open(width, height, 1.0);
+            panel.page = PrefPage::Plugins;
+            let (x, y, w, h) = panel.integration_viewport();
+            let save = panel.button_rects().into_iter().find(|b| b.action == PrefAction::Save).unwrap();
+            assert!(panel.integration_scrollbar().is_some());
+            assert!(!panel.scroll_integrations(panel.x + 10.0, y + 10.0, 100.0));
+            assert!(!panel.scroll_integrations(x + 10.0, y - 5.0, 100.0));
+            assert!(panel.scroll_integrations(x + 10.0, y + 10.0, 25.0));
+            assert_eq!(panel.action_at(x + 20.0, y - 5.0), None);
+            assert_eq!(panel.action_at(x + 20.0, y + 5.0), Some(PrefAction::OpenPlugin(Plugin::Fish)));
+            assert!(panel.scroll_integrations(x + 10.0, y + 10.0, 10000.0));
+            assert_eq!(panel.integration_scroll, panel.integration_scroll_max());
+            assert!(!panel.scroll_integrations(x + 10.0, y + 10.0, 10000.0));
+            let yay = panel.button_rects().into_iter().find(|b| b.action == PrefAction::OpenPlugin(Plugin::Yay)).unwrap();
+            assert!(yay.y >= y && yay.y + yay.h <= y + h + 0.01);
+            assert_eq!(panel.action_at(yay.x + 10.0, yay.y + 10.0), Some(yay.action));
+            assert_eq!(panel.action_at(x + 20.0, y + h + 3.0), None);
+            assert_eq!(panel.action_at(save.x + 10.0, save.y + 10.0), Some(PrefAction::Save));
+            assert_eq!(panel.button_rects().into_iter().find(|b| b.action == PrefAction::Save).unwrap().y, save.y);
+            assert!(!panel.scroll_integrations(x + w / 2.0, y + 10.0, f32::NAN));
+            panel.plugin = Some(Plugin::Yay);
+            assert!(panel.integration_scrollbar().is_none());
+            assert!(!panel.scroll_integrations(x + 10.0, y + 10.0, -100.0));
+            panel.plugin = None;
+            assert_eq!(panel.integration_scroll, panel.integration_scroll_max());
+        }
+    }
+
+    #[test]
+    fn integration_scrollbar_drag_clamps_and_stops_on_release() {
+        let mut panel = PreferencesPanel::new();
+        panel.open(980, 640, 1.0);
+        panel.page = PrefPage::Plugins;
+        let (x, y, _, _) = panel.integration_scrollbar().unwrap();
+        let (px, py) = panel.pos(x + 3.0, y + 5.0);
+        assert!(panel.begin_integration_scrollbar_drag(px, py));
+        assert!(panel.drag_integration_scrollbar(panel.y + 2000.0 * panel.scale));
+        assert_eq!(panel.integration_scroll, panel.integration_scroll_max());
+        assert!(panel.drag_integration_scrollbar(panel.y));
+        assert_eq!(panel.integration_scroll, 0.0);
+        panel.end_integration_scrollbar_drag();
+        assert!(!panel.drag_integration_scrollbar(py + 100.0));
+        let (px, py) = panel.pos(x + 3.0, PreferencesPanel::LIST_BOTTOM - 1.0);
+        assert!(panel.begin_integration_scrollbar_drag(px, py));
+        assert!(panel.integration_scroll > 0.0);
+        panel.close();
+        assert!(!panel.drag_integration_scrollbar(py));
+    }
+
+    #[test]
     fn plugin_card_switch_and_detail_actions_have_separate_targets() {
         let mut panel = PreferencesPanel::new();
         panel.open(980, 640, 1.0);
@@ -437,6 +574,10 @@ mod tests {
         let fish_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleFish).unwrap();
         assert_eq!(panel.action_at(fish_card.x + 10.0, fish_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Fish)));
         assert_eq!(panel.action_at(fish_switch.x + 10.0, fish_switch.y + 10.0), Some(PrefAction::ToggleFish));
+
+        let (vx, vy, _, _) = panel.integration_viewport();
+        assert!(panel.scroll_integrations(vx + 10.0, vy + 10.0, 10000.0));
+        let buttons = panel.button_rects();
 
         let yazi_card = buttons.iter().find(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Yazi)).unwrap();
         let yazi_switch = buttons.iter().find(|rect| rect.action == PrefAction::ToggleYazi).unwrap();
