@@ -702,24 +702,6 @@ impl GpuState {
                     add("Scrollback lines", 226.0, 357.0, 200.0, 15.0, primary);
                     add(&self.settings.scrollback.to_string(), 530.0, 358.0, 90.0, 13.0, muted);
                 }
-                PrefPage::Packages => {
-                    add("AUR HELPER", 226.0, 91.0, 240.0, 11.0, accent);
-                    add("Yay", 226.0, 132.0, 360.0, 18.0, primary);
-                    let installed = pty::installed_program("yay").is_some();
-                    let supported = packages::yay_install_available();
-                    add(if installed { "Yay is installed" } else if supported { "Yay is not installed" }
-                        else { "Installation is available on Arch-based systems only" },
-                        226.0, 164.0, 478.0, 12.0, muted);
-                    add("Find, install and update packages from the AUR.",
-                        226.0, 199.0, 478.0, 12.0, muted);
-                    add("Installation opens a separate Hafþi window.",
-                        226.0, 222.0, 478.0, 12.0, muted);
-                    add("You may be asked for your sudo password and confirmation.",
-                        226.0, 302.0, 478.0, 12.0, muted);
-                    if !prefs.plugin_error.is_empty() {
-                        add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
-                    }
-                }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
                     add("Image / GIF", 226.0, 189.0, 260.0, 15.0, primary);
@@ -744,7 +726,7 @@ impl GpuState {
                         add("Install them yourself with pacman or an AUR helper.",
                             226.0, 100.0, 478.0, 12.0, muted);
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 49.0;
+                            let y = 112.0 + index as f32 * 44.0;
                             let symbol = match plugin {
                                 Plugin::Fish => ">",
                                 Plugin::Starship => "✦",
@@ -752,6 +734,7 @@ impl GpuState {
                                 Plugin::Sampler => "▥",
                                 Plugin::Yazi => "▣",
                                 Plugin::Micro => "✎",
+                                Plugin::Yay => "Y",
                             };
                             let status = match plugin {
                                 Plugin::Fish => if self.settings.use_fish { "Shell · enabled" } else { "Shell · disabled" },
@@ -760,11 +743,30 @@ impl GpuState {
                                 Plugin::Sampler => if self.settings.use_sampler { "Dashboard · enabled" } else { "Dashboard · disabled" },
                                 Plugin::Yazi => if self.settings.use_yazi { "Files · enabled" } else { "Files · disabled" },
                                 Plugin::Micro => if self.settings.use_micro { "Editor · enabled" } else { "Editor · disabled" },
+                                Plugin::Yay => if pty::installed_program("yay").is_some() { "AUR helper · installed" } else { "AUR helper · not installed" },
                             };
                             add(symbol, 230.0, y + 10.0, 26.0, 20.0, accent);
                             add(plugin.title(), 275.0, y + 2.0, 250.0, 16.0, primary);
                             add(status, 275.0, y + 22.0, 305.0, 12.0, muted);
-                            add("›", 590.0, y + 10.0, 20.0, 20.0, muted);
+                            add("›", if plugin == Plugin::Yay { 681.0 } else { 590.0 }, y + 10.0, 20.0, 20.0, muted);
+                        }
+                    }
+                    Some(Plugin::Yay) => {
+                        add("AUR HELPER", 226.0, 91.0, 240.0, 11.0, accent);
+                        add("Yay", 226.0, 132.0, 360.0, 18.0, primary);
+                        let installed = pty::installed_program("yay").is_some();
+                        let supported = packages::yay_install_available();
+                        add(if installed { "Yay is installed" } else if supported { "Yay is not installed" }
+                            else { "Installation is available on Arch-based systems only" },
+                            226.0, 164.0, 478.0, 12.0, muted);
+                        add("Find, install and update packages from the AUR.",
+                            226.0, 199.0, 478.0, 12.0, muted);
+                        add("Installation opens a separate Hafþi window.",
+                            226.0, 222.0, 478.0, 12.0, muted);
+                        add("You may be asked for your sudo password and confirmation.",
+                            226.0, 302.0, 478.0, 12.0, muted);
+                        if !prefs.plugin_error.is_empty() {
+                            add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
                         }
                     }
                     Some(Plugin::Fish) => {
@@ -894,7 +896,6 @@ impl GpuState {
                     PrefAction::InstallYazi => "Install Yazi",
                     PrefAction::InstallMicro => "Install Micro",
                     PrefAction::InstallYay => "Install Yay",
-                    PrefAction::OpenYayGithub => "View on GitHub ↗",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Integrations",
@@ -1244,20 +1245,20 @@ impl GpuState {
                         shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                     }
                 }
-                PrefPage::Packages => {
-                    shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
-                    shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
-                }
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
                         for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                            let y = 112.0 + index as f32 * 49.0;
+                            let y = 112.0 + index as f32 * 44.0;
                             let hovered = prefs.hovered == Some(PrefAction::OpenPlugin(plugin));
-                            shape(208.0, y - 1.0, 512.0, 46.0, 9.0, card_border);
-                            shape(209.0, y, 510.0, 44.0, 8.0,
+                            shape(208.0, y - 1.0, 512.0, 42.0, 9.0, card_border);
+                            shape(209.0, y, 510.0, 40.0, 8.0,
                                 if hovered { [0.075, 0.09, 0.105, 1.0] } else { card });
                             shape(224.0, y + 5.0, 34.0, 34.0, 7.0, [0.075, 0.22, 0.31, 1.0]);
                         }
+                    }
+                    Some(Plugin::Yay) => {
+                        shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
+                        shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
                     }
                     Some(Plugin::Fish) => {
                         for (y, h) in [(78.0, 102.0), (186.0, 112.0), (306.0, 91.0)] {
@@ -2472,10 +2473,6 @@ fn run() -> Result<()> {
                                     } else {
                                         preferences.plugin_error.clear();
                                     }
-                                }
-                                Some(PrefAction::OpenYayGithub) => {
-                                    let _ = std::process::Command::new("xdg-open")
-                                        .arg("https://github.com/Jguer/yay").spawn();
                                 }
                                 Some(PrefAction::OpenPluginGithub(plugin)) => {
                                     if let Err(error) = std::process::Command::new("xdg-open")

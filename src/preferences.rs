@@ -4,11 +4,10 @@ pub enum PrefPage {
     Terminal,
     Background,
     Plugins,
-    Packages,
 }
 
 impl PrefPage {
-    pub const ALL: [Self; 5] = [Self::Appearance, Self::Terminal, Self::Background, Self::Plugins, Self::Packages];
+    pub const ALL: [Self; 4] = [Self::Appearance, Self::Terminal, Self::Background, Self::Plugins];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -16,7 +15,6 @@ impl PrefPage {
             Self::Terminal => "Terminal",
             Self::Background => "Background",
             Self::Plugins => "Integrations",
-            Self::Packages => "Packages",
         }
     }
 }
@@ -29,10 +27,11 @@ pub enum Plugin {
     Sampler,
     Yazi,
     Micro,
+    Yay,
 }
 
 impl Plugin {
-    pub const ALL: [Self; 6] = [Self::Fish, Self::Starship, Self::Tgpt, Self::Sampler, Self::Yazi, Self::Micro];
+    pub const ALL: [Self; 7] = [Self::Fish, Self::Starship, Self::Tgpt, Self::Sampler, Self::Yazi, Self::Micro, Self::Yay];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -42,6 +41,7 @@ impl Plugin {
             Self::Sampler => "Sampler",
             Self::Yazi => "Yazi",
             Self::Micro => "Micro",
+            Self::Yay => "Yay",
         }
     }
 
@@ -53,6 +53,7 @@ impl Plugin {
             Self::Sampler => "https://github.com/sqshq/sampler",
             Self::Yazi => "https://github.com/sxyazi/yazi",
             Self::Micro => "https://github.com/micro-editor/micro",
+            Self::Yay => "https://github.com/Jguer/yay",
         }
     }
 }
@@ -91,7 +92,6 @@ pub enum PrefAction {
     InstallYazi,
     InstallMicro,
     InstallYay,
-    OpenYayGithub,
     EditSamplerConfig,
     ImageOff,
     ImageBanner,
@@ -251,12 +251,6 @@ impl PreferencesPanel {
                 add(626.0, 351.0, 35.0, 34.0, ScrollbackDown);
                 add(669.0, 351.0, 35.0, 34.0, ScrollbackUp);
             }
-            PrefPage::Packages => {
-                if crate::packages::yay_install_available() && crate::pty::installed_program("yay").is_none() {
-                    add(226.0, 252.0, 150.0, 34.0, InstallYay);
-                }
-                add(226.0, 349.0, 182.0, 34.0, OpenYayGithub);
-            }
             PrefPage::Background => {
                 add(226.0, 126.0, 106.0, 35.0, ImageOff);
                 add(337.0, 126.0, 126.0, 35.0, ImageBanner);
@@ -269,16 +263,18 @@ impl PreferencesPanel {
             PrefPage::Plugins => match self.plugin {
                 None => {
                     for (index, plugin) in Plugin::ALL.into_iter().enumerate() {
-                        let y = 112.0 + index as f32 * 49.0;
-                        add(209.0, y, 404.0, 44.0, OpenPlugin(plugin));
-                        add(620.0, y + 5.0, 84.0, 34.0, match plugin {
+                        let y = 112.0 + index as f32 * 44.0;
+                        add(209.0, y, if plugin == Plugin::Yay { 495.0 } else { 404.0 }, 40.0, OpenPlugin(plugin));
+                        let toggle = match plugin {
                             Plugin::Fish => ToggleFish,
                             Plugin::Starship => ToggleStarship,
                             Plugin::Tgpt => ToggleCommandHelp,
                             Plugin::Sampler => ToggleSampler,
                             Plugin::Yazi => ToggleYazi,
                             Plugin::Micro => ToggleMicro,
-                        });
+                            Plugin::Yay => continue,
+                        };
+                        add(620.0, y + 3.0, 84.0, 34.0, toggle);
                     }
                 }
                 Some(plugin) => {
@@ -306,6 +302,11 @@ impl PreferencesPanel {
                             add(620.0, 125.0, 84.0, 34.0, ToggleYazi);
                             add(226.0, 252.0, 142.0, 34.0, OpenYazi);
                             add(377.0, 252.0, 157.0, 34.0, InstallYazi);
+                        }
+                        Plugin::Yay => {
+                            if crate::packages::yay_install_available() && crate::pty::installed_program("yay").is_none() {
+                                add(226.0, 252.0, 150.0, 34.0, InstallYay);
+                            }
                         }
                         Plugin::Micro => {
                             add(620.0, 125.0, 84.0, 34.0, ToggleMicro);
@@ -442,6 +443,16 @@ mod tests {
         assert!(micro_card.y + micro_card.h < panel.y + panel.height());
         assert_eq!(panel.action_at(micro_card.x + 10.0, micro_card.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Micro)));
         assert_eq!(panel.action_at(micro_switch.x + 10.0, micro_switch.y + 10.0), Some(PrefAction::ToggleMicro));
+
+        let cards: Vec<_> = buttons.iter().filter(|rect| matches!(rect.action, PrefAction::OpenPlugin(_))).collect();
+        let save = buttons.iter().find(|rect| rect.action == PrefAction::Save).unwrap();
+        for pair in cards.windows(2) { assert!(pair[0].y + pair[0].h < pair[1].y); }
+        let yay = cards.iter().find(|rect| rect.action == PrefAction::OpenPlugin(Plugin::Yay)).unwrap();
+        assert!(yay.y + yay.h < save.y);
+        assert_eq!(panel.action_at(yay.x + yay.w - 10.0, yay.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Yay)));
+        panel.plugin = Some(Plugin::Yay);
+        let link = panel.button_rects().into_iter().find(|rect| rect.action == PrefAction::OpenPluginGithub(Plugin::Yay)).unwrap();
+        assert_eq!(panel.action_at(link.x + 10.0, link.y + 10.0), Some(link.action));
 
         panel.plugin = Some(Plugin::Tgpt);
         let buttons = panel.button_rects();
