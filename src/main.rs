@@ -761,10 +761,13 @@ impl GpuState {
                             226.0, 164.0, 478.0, 12.0, muted);
                         add("Find, install and update packages from the AUR.",
                             226.0, 199.0, 478.0, 12.0, muted);
-                        add("Installation opens a separate Hafþi window.",
-                            226.0, 222.0, 478.0, 12.0, muted);
+                        add(if installed { "Remove existing Yay before changing versions." }
+                            else if prefs.yay_version == packages::YayVersion::Development {
+                                "Latest development code from the yay-git AUR package."
+                            } else { "Stable releases; recommended for everyday use." },
+                            226.0, 259.0, 478.0, 11.0, muted);
                         add("You may be asked for your sudo password and confirmation.",
-                            226.0, 302.0, 478.0, 12.0, muted);
+                            226.0, 325.0, 478.0, 11.0, muted);
                         if !prefs.plugin_error.is_empty() {
                             add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
                         }
@@ -895,7 +898,9 @@ impl GpuState {
                     PrefAction::InstallSampler => "Install Sampler",
                     PrefAction::InstallYazi => "Install Yazi",
                     PrefAction::InstallMicro => "Install Micro",
-                    PrefAction::InstallYay => "Install Yay",
+                    PrefAction::InstallYay => if prefs.yay_version == packages::YayVersion::Development { "Install yay-git" } else { "Install Yay" },
+                    PrefAction::YayStable => "Stable",
+                    PrefAction::YayDevelopment => "Development (yay-git)",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Integrations",
@@ -1315,6 +1320,8 @@ impl GpuState {
                     continue;
                 }
                 let active = button.action == selected || button.action == PrefAction::Save
+                    || (button.action == PrefAction::YayStable && prefs.yay_version == packages::YayVersion::Stable)
+                    || (button.action == PrefAction::YayDevelopment && prefs.yay_version == packages::YayVersion::Development)
                     || (button.action == PrefAction::ToggleCommandHelp && self.settings.command_help_enabled)
                     || (button.action == PrefAction::ToggleFish && self.settings.use_fish)
                     || (button.action == PrefAction::ToggleFishGreeting && self.settings.show_fish_greeting)
@@ -1909,7 +1916,10 @@ fn run() -> Result<()> {
         Some(std::env::args().nth(2).context("missing plugin name")?)
     } else { None };
     let install_yay = std::env::args().nth(1).as_deref() == Some("--install-yay");
-    let installer_command = install_yay.then(packages::yay_install_command).transpose()?;
+    let installer_command = if install_yay {
+        let version = packages::YayVersion::from_arg(std::env::args().nth(2).as_deref())?;
+        Some(packages::yay_install_command(version)?)
+    } else { None };
     let plugin_command = plugin.as_deref().map(plugins::command).transpose()?;
     let interactive_args = if std::env::args().nth(1).as_deref() == Some("--interactive") {
         Some(std::env::args_os().skip(2).collect::<Vec<_>>())
@@ -2467,8 +2477,13 @@ fn run() -> Result<()> {
                                     preferences.plugin = None;
                                     preferences.question_editing = false;
                                 }
+                                Some(PrefAction::YayStable | PrefAction::YayDevelopment) => {
+                                    preferences.yay_version = if action == Some(PrefAction::YayDevelopment) {
+                                        packages::YayVersion::Development
+                                    } else { packages::YayVersion::Stable };
+                                }
                                 Some(PrefAction::InstallYay) => {
-                                    if let Err(error) = packages::open_yay_installer() {
+                                    if let Err(error) = packages::open_yay_installer(preferences.yay_version) {
                                         preferences.plugin_error = format!("Could not install Yay: {error}");
                                     } else {
                                         preferences.plugin_error.clear();

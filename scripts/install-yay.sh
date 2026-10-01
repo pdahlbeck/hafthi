@@ -19,6 +19,13 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+channel=${1:-stable}
+case "$channel" in
+    stable) package=yay ;;
+    development) package=yay-git ;;
+    *) printf 'Unknown Yay version. Choose stable or development.\n'; exit 1 ;;
+esac
+
 if [[ -r /etc/os-release ]]; then
     . /etc/os-release
 else
@@ -38,15 +45,15 @@ if command -v yay >/dev/null 2>&1; then
 fi
 command -v pacman >/dev/null
 command -v sudo >/dev/null
-printf 'Installing Yay. Package confirmations and your sudo password may be required.\n'
+printf 'Installing %s. Package confirmations and your sudo password may be required.\n' "$package"
 
-# Prefer the distribution's own package when one is available.
-if pacman -Si yay >/dev/null 2>&1; then
+# Stable may use a distribution package; development always uses yay-git.
+if [[ "$channel" == stable ]] && pacman -Si yay >/dev/null 2>&1; then
     sudo pacman -S --needed git base-devel yay
 else
     sudo pacman -S --needed git base-devel
     build_dir=$(mktemp -d -t hafthi-yay.XXXXXXXX)
-    git clone -- https://aur.archlinux.org/yay.git "$build_dir/yay"
+    git clone -- "https://aur.archlinux.org/${package}.git" "$build_dir/yay"
     cd "$build_dir/yay"
     makepkg -si
 fi

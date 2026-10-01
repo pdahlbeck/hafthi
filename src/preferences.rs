@@ -92,6 +92,8 @@ pub enum PrefAction {
     InstallYazi,
     InstallMicro,
     InstallYay,
+    YayStable,
+    YayDevelopment,
     EditSamplerConfig,
     ImageOff,
     ImageBanner,
@@ -136,6 +138,7 @@ pub struct PreferencesPanel {
     pub question_editing: bool,
     pub question_input: String,
     pub plugin_error: String,
+    pub yay_version: crate::packages::YayVersion,
 }
 
 impl PreferencesPanel {
@@ -160,6 +163,7 @@ impl PreferencesPanel {
             question_editing: false,
             question_input: String::new(),
             plugin_error: String::new(),
+            yay_version: crate::packages::YayVersion::Stable,
         }
     }
 
@@ -304,8 +308,10 @@ impl PreferencesPanel {
                             add(377.0, 252.0, 157.0, 34.0, InstallYazi);
                         }
                         Plugin::Yay => {
+                            add(226.0, 221.0, 130.0, 34.0, YayStable);
+                            add(365.0, 221.0, 225.0, 34.0, YayDevelopment);
                             if crate::packages::yay_install_available() && crate::pty::installed_program("yay").is_none() {
-                                add(226.0, 252.0, 150.0, 34.0, InstallYay);
+                                add(226.0, 283.0, 150.0, 34.0, InstallYay);
                             }
                         }
                         Plugin::Micro => {
@@ -451,6 +457,11 @@ mod tests {
         assert!(yay.y + yay.h < save.y);
         assert_eq!(panel.action_at(yay.x + yay.w - 10.0, yay.y + 10.0), Some(PrefAction::OpenPlugin(Plugin::Yay)));
         panel.plugin = Some(Plugin::Yay);
+        for action in [PrefAction::YayStable, PrefAction::YayDevelopment] {
+            let rect = panel.button_rects().into_iter().find(|rect| rect.action == action).unwrap();
+            assert_eq!(panel.action_at(rect.x + rect.w / 2.0, rect.y + rect.h / 2.0), Some(action));
+        }
+        assert_eq!(panel.yay_version, crate::packages::YayVersion::Stable);
         let link = panel.button_rects().into_iter().find(|rect| rect.action == PrefAction::OpenPluginGithub(Plugin::Yay)).unwrap();
         assert_eq!(panel.action_at(link.x + 10.0, link.y + 10.0), Some(link.action));
 
