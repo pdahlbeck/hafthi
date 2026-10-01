@@ -15,6 +15,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev desktop-file-utils
       - run: desktop-file-validate assets/hafthi.desktop
       - run: sh tests/ghost-tasks.sh
+      - run: python3 tests/install-yay.py
       - run: cargo check
       - run: cargo test
 

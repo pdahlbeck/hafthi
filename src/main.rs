@@ -6,6 +6,7 @@ mod diagnostics;
 mod ghost_status;
 mod menu;
 mod plugins;
+mod packages;
 mod preferences;
 mod pty;
 mod settings;
@@ -701,6 +702,24 @@ impl GpuState {
                     add("Scrollback lines", 226.0, 357.0, 200.0, 15.0, primary);
                     add(&self.settings.scrollback.to_string(), 530.0, 358.0, 90.0, 13.0, muted);
                 }
+                PrefPage::Packages => {
+                    add("AUR HELPER", 226.0, 91.0, 240.0, 11.0, accent);
+                    add("Yay", 226.0, 132.0, 360.0, 18.0, primary);
+                    let installed = pty::installed_program("yay").is_some();
+                    let supported = packages::yay_install_available();
+                    add(if installed { "Yay is installed" } else if supported { "Yay is not installed" }
+                        else { "Installation is available on Arch-based systems only" },
+                        226.0, 164.0, 478.0, 12.0, muted);
+                    add("Find, install and update packages from the AUR.",
+                        226.0, 199.0, 478.0, 12.0, muted);
+                    add("Installation opens a separate Hafþi window.",
+                        226.0, 222.0, 478.0, 12.0, muted);
+                    add("You may be asked for your sudo password and confirmation.",
+                        226.0, 302.0, 478.0, 12.0, muted);
+                    if !prefs.plugin_error.is_empty() {
+                        add(&prefs.plugin_error, 226.0, 394.0, 478.0, 11.0, Color::rgb(245, 136, 136));
+                    }
+                }
                 PrefPage::Background => {
                     add("IMAGE DISPLAY", 226.0, 91.0, 240.0, 11.0, accent);
                     add("Image / GIF", 226.0, 189.0, 260.0, 15.0, primary);
@@ -874,6 +893,8 @@ impl GpuState {
                     PrefAction::InstallSampler => "Install Sampler",
                     PrefAction::InstallYazi => "Install Yazi",
                     PrefAction::InstallMicro => "Install Micro",
+                    PrefAction::InstallYay => "Install Yay",
+                    PrefAction::OpenYayGithub => "View on GitHub ↗",
                     PrefAction::EditSamplerConfig => "Edit dashboard…",
                     PrefAction::OpenPluginGithub(_) => "View on GitHub ↗",
                     PrefAction::BackToPlugins => "‹ Integrations",
@@ -1222,6 +1243,10 @@ impl GpuState {
                         shape(208.0, y, 512.0, h, 5.0, card_border);
                         shape(209.0, y + 1.0, 510.0, h - 2.0, 4.0, card);
                     }
+                }
+                PrefPage::Packages => {
+                    shape(208.0, 78.0, 512.0, 319.0, 5.0, card_border);
+                    shape(209.0, 79.0, 510.0, 317.0, 4.0, card);
                 }
                 PrefPage::Plugins => match prefs.plugin {
                     None => {
@@ -1882,6 +1907,8 @@ fn run() -> Result<()> {
     let plugin = if std::env::args().nth(1).as_deref() == Some("--plugin") {
         Some(std::env::args().nth(2).context("missing plugin name")?)
     } else { None };
+    let install_yay = std::env::args().nth(1).as_deref() == Some("--install-yay");
+    let installer_command = install_yay.then(packages::yay_install_command).transpose()?;
     let plugin_command = plugin.as_deref().map(plugins::command).transpose()?;
     let interactive_args = if std::env::args().nth(1).as_deref() == Some("--interactive") {
         Some(std::env::args_os().skip(2).collect::<Vec<_>>())
@@ -1896,7 +1923,9 @@ fn run() -> Result<()> {
 
     let mut settings = Settings::load();
 
-    let title = if let Some(args) = &interactive_args {
+    let title = if install_yay {
+        "Install Yay — Hafþi".to_string()
+    } else if let Some(args) = &interactive_args {
         let name = args.first()
             .and_then(|arg| std::path::Path::new(arg).file_name())
             .and_then(|name| name.to_str())
@@ -1906,7 +1935,7 @@ fn run() -> Result<()> {
         plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" }))
     };
     let builder = WindowBuilder::new()
-        .with_title(title)
+        .with_title(title.clone())
         .with_transparent(true)
         .with_inner_size(LogicalSize::new(
             settings.window_width as f64,
@@ -1930,7 +1959,7 @@ fn run() -> Result<()> {
     let mut wayland_no_blur = wayland_effect::NoBlur::attach(&window);
 
     let mut gpu = pollster::block_on(GpuState::new(window.clone(), settings.clone()))?;
-    window.set_title(&plugin.as_ref().map_or("Hafþi".to_string(), |name| format!("{} — Hafþi", match name.as_str() { "yazi" => "Yazi", "micro" => "Micro", _ => "Sampler" })));
+    window.set_title(&title);
     if wayland_no_blur.is_none() {
         eprintln!("Hafþi: ext-background-effect-v1 unavailable, using Hyprland fallback");
         request_hyprland_no_blur();
@@ -1956,7 +1985,7 @@ fn run() -> Result<()> {
         settings.ansi,
         settings.scrollback,
     );
-    let pty = if let Some(command) = interactive_command.or(plugin_command) {
+    let pty = if let Some(command) = installer_command.or(interactive_command).or(plugin_command) {
         PtySession::spawn_with_command(cols, rows, proxy.clone(), command)?
     } else {
         PtySession::spawn(cols, rows, proxy.clone(), &settings, &ghost_inbox, &ghost_state)?
@@ -2424,6 +2453,7 @@ fn run() -> Result<()> {
                                 Some(PrefAction::SelectPage(page)) => {
                                     preferences.page = page;
                                     preferences.plugin = None;
+                                    preferences.plugin_error.clear();
                                     preferences.hovered = None;
                                     preferences.question_editing = false;
                                 }
@@ -2435,6 +2465,17 @@ fn run() -> Result<()> {
                                 Some(PrefAction::BackToPlugins) => {
                                     preferences.plugin = None;
                                     preferences.question_editing = false;
+                                }
+                                Some(PrefAction::InstallYay) => {
+                                    if let Err(error) = packages::open_yay_installer() {
+                                        preferences.plugin_error = format!("Could not install Yay: {error}");
+                                    } else {
+                                        preferences.plugin_error.clear();
+                                    }
+                                }
+                                Some(PrefAction::OpenYayGithub) => {
+                                    let _ = std::process::Command::new("xdg-open")
+                                        .arg("https://github.com/Jguer/yay").spawn();
                                 }
                                 Some(PrefAction::OpenPluginGithub(plugin)) => {
                                     if let Err(error) = std::process::Command::new("xdg-open")

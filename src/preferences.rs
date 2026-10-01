@@ -4,10 +4,11 @@ pub enum PrefPage {
     Terminal,
     Background,
     Plugins,
+    Packages,
 }
 
 impl PrefPage {
-    pub const ALL: [Self; 4] = [Self::Appearance, Self::Terminal, Self::Background, Self::Plugins];
+    pub const ALL: [Self; 5] = [Self::Appearance, Self::Terminal, Self::Background, Self::Plugins, Self::Packages];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -15,6 +16,7 @@ impl PrefPage {
             Self::Terminal => "Terminal",
             Self::Background => "Background",
             Self::Plugins => "Integrations",
+            Self::Packages => "Packages",
         }
     }
 }
@@ -88,6 +90,8 @@ pub enum PrefAction {
     InstallSampler,
     InstallYazi,
     InstallMicro,
+    InstallYay,
+    OpenYayGithub,
     EditSamplerConfig,
     ImageOff,
     ImageBanner,
@@ -246,6 +250,12 @@ impl PreferencesPanel {
                 add(526.0, 278.0, 178.0, 31.0, EditTextColor);
                 add(626.0, 351.0, 35.0, 34.0, ScrollbackDown);
                 add(669.0, 351.0, 35.0, 34.0, ScrollbackUp);
+            }
+            PrefPage::Packages => {
+                if crate::packages::yay_install_available() && crate::pty::installed_program("yay").is_none() {
+                    add(226.0, 252.0, 150.0, 34.0, InstallYay);
+                }
+                add(226.0, 349.0, 182.0, 34.0, OpenYayGithub);
             }
             PrefPage::Background => {
                 add(226.0, 126.0, 106.0, 35.0, ImageOff);
